@@ -8,18 +8,18 @@
 /* ── CSS Variables ─────────────────────────────────────────── */
 :root {
   /* Colors */
-  --bg-base:        #0a0b0f;
-  --bg-surface:     #111218;
-  --bg-elevated:    #181a23;
-  --bg-hover:       #1f2130;
-  --bg-card:        #13151f;
-  --border:         rgba(255,255,255,0.07);
-  --border-strong:  rgba(255,255,255,0.12);
+  --bg-base:        #f5f3e9;
+  --bg-surface:     #ffffff;
+  --bg-elevated:    #faf9f5;
+  --bg-hover:       #f0ede2;
+  --bg-card:        #ffffff;
+  --border:         rgba(0,0,0,0.08);
+  --border-strong:  rgba(0,0,0,0.14);
 
   /* Brand gradient */
-  --accent-1: #6c63ff;
-  --accent-2: #a855f7;
-  --accent-grad: linear-gradient(135deg, #6c63ff 0%, #a855f7 100%);
+  --accent-1: #6366f1;
+  --accent-2: #7c3aed;
+  --accent-grad: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
 
   /* Status colors */
   --success:  #10b981;
@@ -29,18 +29,18 @@
   --neutral:  #6b7280;
 
   /* Text */
-  --text-primary:   #f1f2f6;
-  --text-secondary: #9ca3af;
-  --text-muted:     #4b5563;
-  --text-accent:    #a78bfa;
+  --text-primary:   #2d2c2a;
+  --text-secondary: #6d6b67;
+  --text-muted:     #9d9b97;
+  --text-accent:    #7c3aed;
 
   /* Campaign colors */
-  --c-purple: #8b5cf6;
+  --c-purple: #7c3aed;
   --c-blue:   #3b82f6;
-  --c-teal:   #14b8a6;
-  --c-orange: #f97316;
-  --c-green:  #22c55e;
-  --c-red:    #ef4444;
+  --c-teal:   #0f766e;
+  --c-orange: #d97706;
+  --c-green:  #047857;
+  --c-red:    #b91c1c;
 
   /* Layout */
   --sidebar-w: 260px;
@@ -51,10 +51,10 @@
   --radius-xl: 24px;
 
   /* Shadows */
-  --shadow-sm:  0 1px 3px rgba(0,0,0,0.4);
-  --shadow-md:  0 4px 16px rgba(0,0,0,0.4);
-  --shadow-lg:  0 12px 40px rgba(0,0,0,0.5);
-  --shadow-glow: 0 0 30px rgba(108,99,255,0.2);
+  --shadow-sm:  0 1px 3px rgba(0,0,0,0.05);
+  --shadow-md:  0 4px 16px rgba(0,0,0,0.05);
+  --shadow-lg:  0 12px 40px rgba(0,0,0,0.07);
+  --shadow-glow: 0 0 30px rgba(99,102,241,0.06);
 
   /* Transitions */
   --t-fast:   0.12s ease;
@@ -73,7 +73,7 @@ body {
   min-height: 100vh;
 }
 a { color: var(--text-accent); text-decoration: none; }
-a:hover { color: #c4b5fd; }
+a:hover { color: #5b21b6; }
 img { max-width: 100%; }
 button { cursor: pointer; font-family: inherit; }
 input, select, textarea { font-family: inherit; }
@@ -81,8 +81,8 @@ input, select, textarea { font-family: inherit; }
 /* ── Scrollbar ─────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-surface); }
-::-webkit-scrollbar-thumb { background: #2d2f3e; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3d3f52; }
+::-webkit-scrollbar-thumb { background: #dcd7ca; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #cfc9ba; }
 
 /* ── Layout ────────────────────────────────────────────────── */
 .app-layout { display: flex; min-height: 100vh; }
