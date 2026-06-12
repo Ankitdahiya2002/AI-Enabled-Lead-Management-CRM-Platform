@@ -127,12 +127,13 @@ def detect_fp_level(course_level: str, lead_name: str = "", default_level: str =
     cl = course_level.strip().upper()
     ln = (lead_name or "").upper()
 
-    # Prioritize any Low/L2 markers in either course_level (cl) or lead/opportunity name (ln)
+    # Prioritize any HIGH markers first (e.g. fp_l1_high, fp_l2_high, L1_HIGH)
+    if "HIGH" in cl or "L1_HIGH" in cl or "L1 HIGH" in cl or "HIGH" in ln or "L1_HIGH" in ln or "L1 HIGH" in ln:
+        return "fp_l1"
+
+    # Then check for Low/L2 markers (e.g. fpl1_low, fp_l2_low, L1_LOW, L2)
     if "L2" in cl or "LOW" in cl or "L1_LOW" in cl or "L1 LOW" in cl or "L2" in ln or "LOW" in ln or "L1_LOW" in ln or "L1 LOW" in ln:
         return "fp_l2"
-    
-    if "L1_HIGH" in cl or "L1 HIGH" in cl or "HIGH" in cl or "L1_HIGH" in ln or "L1 HIGH" in ln or "HIGH" in ln:
-        return "fp_l1"
         
     if "L1" in cl or "L1" in ln:
         return "fp_l1"
