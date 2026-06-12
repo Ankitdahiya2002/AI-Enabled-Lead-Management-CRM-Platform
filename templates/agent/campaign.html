@@ -100,7 +100,7 @@
             <div style="font-size:0.75rem;color:var(--text-muted);">{{ lead.amount | inr }}</div>
           {% endif %}
         </td>
-        <td class="muted">
+        <td class="muted" style="white-space: nowrap;">
           <div>{{ lead.bootcamp_date or '—' }}</div>
           {% if (campaign_type == 'fp_l1' or campaign_type == 'fp_l2') and lead.fp_time %}
             <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">⏰ {{ lead.fp_time | format_time }}</div>
