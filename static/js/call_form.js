@@ -170,7 +170,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ── Disposition auto-suggestions ──────────────────────────
   const dispositionField = document.getElementById('disposition');
-  if (callStatus && dispositionField) {
+  if (callStatus && dispositionField && dispositionField.tagName === 'INPUT') {
     const dispositionSuggestions = {
       follow_up:       ['Call back tomorrow', 'Will decide after discussing', 'Needs time to think', 'Husband/Wife to discuss'],
       converted:       ['Paid on call', 'Token paid, balance pending', 'Full payment done'],

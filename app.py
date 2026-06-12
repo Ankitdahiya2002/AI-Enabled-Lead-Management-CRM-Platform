@@ -175,52 +175,129 @@ def admin_dashboard():
     detail = {'converted_leads': [], 'follow_up_leads': [], 'today_call_logs': []}
     recent_uploads = []
 
-    # ── Query 1: all leads (lightweight columns only) ─────────────────────
-    # Derive total, converted, follow-up counts AND campaign breakdown
-    # from a SINGLE query instead of 8 separate count queries.
+    # ── Query 1: counts in parallel using thread pool ─────────────────────
     try:
-        all_leads_resp = supabase_admin.table('leads') \
-            .select('id,lead_name,contact_no,bootcamp_title,campaign_type,'
-                    'priority,agent_name,final_status,last_call_date,updated_at',
-                    count='exact') \
-            .limit(10000) \
-            .execute()
-        all_leads = all_leads_resp.data or []
-
+        from concurrent.futures import ThreadPoolExecutor
         campaign_types = ['atpitch_sia','atpitch_sta','atpitch_others','upsell','fp_l1','fp_l2']
-        campaign_stats = {c: 0 for c in campaign_types}
-        converted_leads  = []
-        follow_up_leads  = []
-        total  = len(all_leads)
-        n_conv = 0
-        n_fu   = 0
 
-        for lead in all_leads:
-            ct = lead.get('campaign_type','')
-            fs = lead.get('final_status','')
-            if ct in campaign_stats:
-                campaign_stats[ct] += 1
-            if fs == 'Converted':
-                n_conv += 1
-                converted_leads.append(lead)
-            elif fs == 'Follow Up':
-                n_fu += 1
-                follow_up_leads.append(lead)
+        queries = {
+            'total': supabase_admin.table('leads').select('id', count='exact'),
+            'converted': supabase_admin.table('leads').select('id', count='exact').eq('final_status', 'Converted'),
+            'follow_up': supabase_admin.table('leads').select('id', count='exact').eq('final_status', 'Follow Up'),
+        }
+        for ct in campaign_types:
+            queries[f'camp_{ct}'] = supabase_admin.table('leads').select('id', count='exact').eq('campaign_type', ct)
 
-        # Sort detail lists
-        converted_leads = sorted(converted_leads,
-                                  key=lambda x: x.get('updated_at',''), reverse=True)[:50]
-        follow_up_leads = sorted(follow_up_leads,
-                                  key=lambda x: x.get('last_call_date') or '', reverse=True)[:50]
+        def get_count_val(q):
+            return q.execute().count or 0
+
+        counts = {}
+        try:
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                future_to_key = {executor.submit(get_count_val, q): key for key, q in queries.items()}
+                for future in future_to_key:
+                    key = future_to_key[future]
+                    counts[key] = future.result()
+        except Exception as tpe_err:
+            app.logger.warning(f"ThreadPoolExecutor failed in admin_dashboard, falling back to sequential execution: {tpe_err}")
+            counts = {}
+            for key, q in queries.items():
+                try:
+                    counts[key] = get_count_val(q)
+                except Exception as seq_err:
+                    counts[key] = 0
+                    app.logger.error(f"Sequential fallback query failed for key {key}: {seq_err}")
+
+        total = counts.get('total', 0)
+        n_conv = counts.get('converted', 0)
+        n_fu = counts.get('follow_up', 0)
+        campaign_stats = {ct: counts.get(f'camp_{ct}', 0) for ct in campaign_types}
+
+        # ── Query 2: Retrieve detail lists ────────────────────────────────────
+        # Fetch latest 50 converted leads
+        converted_leads_resp = supabase_admin.table('leads') \
+            .select('id,lead_name,contact_no,bootcamp_title,campaign_type,'
+                    'priority,agent_name,final_status,last_call_date,updated_at') \
+            .eq('final_status', 'Converted') \
+            .order('updated_at', desc=True) \
+            .limit(50) \
+            .execute()
+        converted_leads = converted_leads_resp.data or []
+
+        # Fetch up to 1000 follow-up leads (to search for overdue status)
+        follow_up_all_resp = supabase_admin.table('leads') \
+            .select('id,lead_name,contact_no,bootcamp_title,campaign_type,'
+                    'priority,agent_name,final_status,last_call_date,updated_at') \
+            .eq('final_status', 'Follow Up') \
+            .limit(1000) \
+            .execute()
+        follow_up_all = follow_up_all_resp.data or []
+
+        # Latest 50 follow ups for the Follow-Up Leads panel
+        follow_up_leads = sorted(follow_up_all,
+                                 key=lambda x: x.get('last_call_date') or '', reverse=True)[:50]
+
+        # Calculate overdue follow-ups
+        fu_lead_ids = [l['id'] for l in follow_up_all]
+        followup_info = {}
+        if fu_lead_ids:
+            attempts_data = []
+            # Query call attempts in chunks of 200 to prevent long URL query failures
+            for i in range(0, len(fu_lead_ids), 200):
+                chunk = fu_lead_ids[i:i+200]
+                attempts_resp = supabase_admin.table('call_attempts')\
+                    .select('lead_id,follow_up_date,follow_up_time')\
+                    .in_('lead_id', chunk)\
+                    .eq('call_status', 'follow_up')\
+                    .order('called_at', desc=True)\
+                    .execute()
+                attempts_data.extend(attempts_resp.data or [])
+
+            for att in attempts_data:
+                l_id = att.get('lead_id')
+                if l_id not in followup_info:
+                    followup_info[l_id] = {
+                        'date': att.get('follow_up_date'),
+                        'time': att.get('follow_up_time')
+                    }
+
+        from datetime import timezone as py_timezone, timedelta as py_timedelta
+        ist = py_timezone(py_timedelta(hours=5, minutes=30))
+        now_local = datetime.now(py_timezone.utc).astimezone(ist)
+
+        overdue_leads = []
+        for lead in follow_up_all:
+            info = followup_info.get(lead['id'], {})
+            lead_date = info.get('date') or lead.get('fp_date')
+            lead_time = info.get('time') or lead.get('fp_time')
+            lead['follow_up_date'] = lead_date
+            lead['follow_up_time'] = lead_time
+            if lead_date:
+                try:
+                    t_str = lead_time if lead_time else "00:00:00"
+                    if len(t_str) == 5:
+                        t_str = f"{t_str}:00"
+                    scheduled_dt = datetime.strptime(f"{lead_date} {t_str}", "%Y-%m-%d %H:%M:%S")
+                    scheduled_dt = scheduled_dt.replace(tzinfo=ist)
+                    if now_local > scheduled_dt + py_timedelta(hours=24):
+                        diff = now_local - scheduled_dt
+                        lead['hours_overdue'] = int(diff.total_seconds() // 3600)
+                        overdue_leads.append(lead)
+                except Exception as ex:
+                    app.logger.warning(f"Error parsing follow_up_date/time for lead {lead['id']}: {ex}")
+
+        overdue_leads = sorted(overdue_leads, key=lambda x: x.get('hours_overdue', 0), reverse=True)
 
         stats.update({
-            'total_leads':    total,
-            'converted':      n_conv,
-            'follow_up':      n_fu,
-            'campaign_stats': campaign_stats,
+            'total_leads':       total,
+            'converted':         n_conv,
+            'follow_up':         n_fu,
+            'overdue_followups': len(overdue_leads),
+            'campaign_stats':    campaign_stats,
         })
         detail['converted_leads'] = converted_leads
         detail['follow_up_leads'] = follow_up_leads
+        detail['overdue_followups'] = overdue_leads[:50]
 
     except Exception as e:
         flash(f'Could not load leads: {e}', 'error')
@@ -252,11 +329,19 @@ def admin_dashboard():
     except Exception:
         recent_uploads = []
 
+    # ── Query 5: active agents list (for dashboard assignment) ───────────────
+    try:
+        agents_resp = supabase_admin.table('profiles').select('id,name').eq('role', 'agent').eq('is_active', True).execute()
+        agents = agents_resp.data or []
+    except Exception:
+        agents = []
+
     return render_template('admin/dashboard.html',
                            user=user,
                            stats=stats,
                            detail=detail,
-                           recent_uploads=recent_uploads)
+                           recent_uploads=recent_uploads,
+                           agents=agents)
 
 
 @app.route('/admin/dashboard/export_csv')
@@ -616,6 +701,48 @@ def admin_leads_assign():
                            page=request.form.get('page', '1')))
 
 
+@app.route('/admin/leads/<lead_id>/delete', methods=['POST'])
+@admin_required
+def admin_leads_delete(lead_id):
+    try:
+        supabase_admin.table('leads').delete().eq('id', lead_id).execute()
+        flash('Lead successfully deleted.', 'success')
+    except Exception as e:
+        flash(f'Failed to delete lead: {e}', 'error')
+    
+    referrer = request.referrer or ''
+    if '/agent/leads/' in referrer:
+        return redirect(url_for('admin_leads'))
+    if referrer:
+        return redirect(referrer)
+    return redirect(url_for('admin_leads'))
+
+
+@app.route('/admin/leads/bulk-delete', methods=['POST'])
+@admin_required
+def admin_leads_bulk_delete():
+    lead_ids_str = request.form.get('lead_ids', '').strip()
+    if not lead_ids_str:
+        flash('No leads selected for deletion.', 'error')
+        return redirect(url_for('admin_leads'))
+        
+    lead_ids = [lid.strip() for lid in lead_ids_str.split(',') if lid.strip()]
+    if not lead_ids:
+        flash('No leads selected for deletion.', 'error')
+        return redirect(url_for('admin_leads'))
+        
+    try:
+        supabase_admin.table('leads').delete().in_('id', lead_ids).execute()
+        flash(f'Successfully deleted {len(lead_ids)} leads.', 'success')
+    except Exception as e:
+        flash(f'Failed to delete leads: {e}', 'error')
+        
+    referrer = request.referrer
+    if referrer:
+        return redirect(referrer)
+    return redirect(url_for('admin_leads'))
+
+
 @app.route('/admin/agents')
 @admin_required
 def admin_agents():
@@ -752,33 +879,61 @@ def agent_dashboard():
     ]
     _ctypes = [c[0] for c in _camps]
 
-    # ── Single Supabase query ─────────────────────────────────────────────
-    try:
-        q = supabase_admin.table('leads') \
-            .select('campaign_type,final_status') \
-            .limit(10000)
-        if not is_admin:
-            q = q.ilike('agent_name', f'%{agent_name}%')
-        leads = q.execute().data or []
-    except Exception as ex:
-        app.logger.warning(f'agent_dashboard query failed: {ex}')
-        leads = []
-
-    # ── Aggregate in Python ────────────────────────────────────────────────
+    # ── Parallel Supabase count queries ───────────────────────────────────
     _total = {c: 0 for c in _ctypes}
     _pend  = {c: 0 for c in _ctypes}
     _fu    = {c: 0 for c in _ctypes}
 
-    for row in leads:
-        ct = row.get('campaign_type', '')
-        fs = row.get('final_status',  '')
-        if ct not in _ctypes:
-            continue
-        _total[ct] += 1
-        if fs == 'Pending':
-            _pend[ct] += 1
-        elif fs == 'Follow Up':
-            _fu[ct]   += 1
+    try:
+        from concurrent.futures import ThreadPoolExecutor
+
+        queries = {}
+        for ct in _ctypes:
+            # Total
+            q_tot = supabase_admin.table('leads').select('id', count='exact').eq('campaign_type', ct)
+            if not is_admin:
+                q_tot = q_tot.ilike('agent_name', f'%{agent_name}%').or_(f"final_status.neq.Follow Up,contacted_by.is.null,contacted_by.eq.{agent_name}")
+            queries[f'{ct}_total'] = q_tot
+
+            # Pending
+            q_pend = supabase_admin.table('leads').select('id', count='exact').eq('campaign_type', ct).eq('final_status', 'Pending')
+            if not is_admin:
+                q_pend = q_pend.ilike('agent_name', f'%{agent_name}%')
+            queries[f'{ct}_pending'] = q_pend
+
+            # Follow Up
+            q_fu = supabase_admin.table('leads').select('id', count='exact').eq('campaign_type', ct).eq('final_status', 'Follow Up')
+            if not is_admin:
+                q_fu = q_fu.ilike('agent_name', f'%{agent_name}%').or_(f"contacted_by.is.null,contacted_by.eq.{agent_name}")
+            queries[f'{ct}_fu'] = q_fu
+
+        def get_count_val(q):
+            return q.execute().count or 0
+
+        counts = {}
+        try:
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                future_to_key = {executor.submit(get_count_val, q): key for key, q in queries.items()}
+                for future in future_to_key:
+                    key = future_to_key[future]
+                    counts[key] = future.result()
+        except Exception as tpe_err:
+            app.logger.warning(f"ThreadPoolExecutor failed in agent_dashboard, falling back to sequential execution: {tpe_err}")
+            counts = {}
+            for key, q in queries.items():
+                try:
+                    counts[key] = get_count_val(q)
+                except Exception as seq_err:
+                    counts[key] = 0
+                    app.logger.error(f"Sequential fallback query failed for key {key}: {seq_err}")
+
+        for ct in _ctypes:
+            _total[ct] = counts.get(f'{ct}_total', 0)
+            _pend[ct]  = counts.get(f'{ct}_pending', 0)
+            _fu[ct]    = counts.get(f'{ct}_fu', 0)
+
+    except Exception as ex:
+        app.logger.warning(f'agent_dashboard main query block failed: {ex}')
 
     # ── Build campaigns list ── guaranteed list of plain dicts ─────────────
     campaigns = []
@@ -816,6 +971,7 @@ def agent_campaign(campaign_type):
         query = supabase_admin.table('leads').select('*').eq('campaign_type', campaign_type)
         if not is_admin:
             query = query.ilike('agent_name', f'%{agent_name}%')
+            query = query.or_(f"final_status.neq.Follow Up,contacted_by.is.null,contacted_by.eq.{agent_name}")
         if status_filter:
             query = query.eq('final_status', status_filter)
         if priority_filter:
@@ -850,6 +1006,21 @@ def agent_lead_detail(lead_id):
         lead_resp = supabase_admin.table('leads').select('*').eq('id', lead_id).single().execute()
         lead = lead_resp.data
 
+        if not lead:
+            flash('Lead not found.', 'error')
+            return redirect(url_for('agent_dashboard'))
+
+        # Enforce agent access rules
+        if user['role'] != 'admin':
+            agent_name = user['name']
+            assigned_agents = [a.strip() for a in (lead.get('agent_name') or '').split(',') if a.strip()]
+            if agent_name not in assigned_agents:
+                flash('Access denied.', 'error')
+                return redirect(url_for('agent_dashboard'))
+            if lead.get('final_status') == 'Follow Up' and lead.get('contacted_by') and lead.get('contacted_by') != agent_name:
+                flash('Access denied. This follow-up is owned by another agent.', 'error')
+                return redirect(url_for('agent_dashboard'))
+
         calls_resp = supabase_admin.table('call_attempts').select('*').eq('lead_id', lead_id).order('attempt_number').execute()
         calls = calls_resp.data or []
     except Exception as e:
@@ -871,6 +1042,22 @@ def agent_call_log(lead_id):
     try:
         lead_resp = supabase_admin.table('leads').select('*').eq('id', lead_id).single().execute()
         lead = lead_resp.data
+
+        if not lead:
+            flash('Lead not found.', 'error')
+            return redirect(url_for('agent_dashboard'))
+
+        # Enforce agent access rules
+        if user['role'] != 'admin':
+            agent_name = user['name']
+            assigned_agents = [a.strip() for a in (lead.get('agent_name') or '').split(',') if a.strip()]
+            if agent_name not in assigned_agents:
+                flash('Access denied.', 'error')
+                return redirect(url_for('agent_dashboard'))
+            if lead.get('final_status') == 'Follow Up' and lead.get('contacted_by') and lead.get('contacted_by') != agent_name:
+                flash('Access denied. This follow-up is owned by another agent.', 'error')
+                return redirect(url_for('agent_dashboard'))
+
     except Exception as e:
         flash(f'Lead not found: {e}', 'error')
         return redirect(url_for('agent_dashboard'))
@@ -1026,6 +1213,68 @@ def agent_followup(lead_id):
                            campaign_label=CAMPAIGN_LABELS.get(lead.get('campaign_type', ''), ''))
 
 
+@app.route('/agent/followups')
+@login_required
+def agent_followups():
+    user = get_current_user()
+    agent_name = user['name']
+    is_admin = user['role'] == 'admin'
+
+    search = request.args.get('search', '').strip()
+    campaign_filter = request.args.get('campaign_type', '')
+    priority_filter = request.args.get('priority', '')
+
+    try:
+        query = supabase_admin.table('leads').select('*').eq('final_status', 'Follow Up')
+        if not is_admin:
+            query = query.ilike('agent_name', f'%{agent_name}%')
+            query = query.or_(f"contacted_by.is.null,contacted_by.eq.{agent_name}")
+        if campaign_filter:
+            query = query.eq('campaign_type', campaign_filter)
+        if priority_filter:
+            query = query.eq('priority', priority_filter)
+        if search:
+            query = query.or_(f'lead_name.ilike.%{search}%,contact_no.ilike.%{search}%,bootcamp_title.ilike.%{search}%')
+
+        leads_resp = query.order('last_call_date', desc=True).limit(100).execute()
+        leads = leads_resp.data or []
+
+        # Enrich with scheduled follow-up date/time from call_attempts
+        lead_ids = [l['id'] for l in leads]
+        followup_info = {}
+        if lead_ids:
+            attempts_resp = supabase_admin.table('call_attempts')\
+                .select('lead_id,follow_up_date,follow_up_time')\
+                .in_('lead_id', lead_ids)\
+                .eq('call_status', 'follow_up')\
+                .order('called_at', desc=True)\
+                .execute()
+
+            for att in (attempts_resp.data or []):
+                l_id = att.get('lead_id')
+                if l_id not in followup_info:
+                    followup_info[l_id] = {
+                        'date': att.get('follow_up_date'),
+                        'time': att.get('follow_up_time')
+                    }
+
+        for lead in leads:
+            info = followup_info.get(lead['id'], {})
+            lead['follow_up_date'] = info.get('date') or lead.get('fp_date')
+            lead['follow_up_time'] = info.get('time') or lead.get('fp_time')
+
+    except Exception as e:
+        leads = []
+        flash(f'Error fetching follow-ups: {e}', 'error')
+
+    return render_template('agent/followups.html',
+                           user=user,
+                           leads=leads,
+                           search=search,
+                           campaign_filter=campaign_filter,
+                           priority_filter=priority_filter)
+
+
 # ============================================================
 # API ENDPOINTS (for AJAX)
 # ============================================================
@@ -1067,7 +1316,12 @@ def api_search_leads():
             query = query.ilike('agent_name', f'%{user["name"]}%')
 
         result = query.execute()
-        return jsonify(result.data or [])
+        data = result.data or []
+        if user.get('role') == 'agent':
+            for lead in data:
+                if 'contact_no' in lead:
+                    lead['contact_no'] = mask_phone(lead['contact_no'], role='agent')
+        return jsonify(data)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1185,6 +1439,13 @@ def inr_format(value):
         return f'₹{float(value):,.0f}'
     except Exception:
         return str(value)
+
+
+@app.template_filter('display_agent_name')
+def display_agent_name_filter(value):
+    if not value or ',' in str(value):
+        return None
+    return str(value).strip()
 
 
 if __name__ == '__main__':

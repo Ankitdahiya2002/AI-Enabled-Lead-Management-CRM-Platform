@@ -91,8 +91,11 @@
           <!-- Disposition -->
           <div class="form-group">
             <label class="form-label">Disposition</label>
-            <input type="text" name="disposition" id="disposition" class="form-control"
-                   placeholder="e.g. Already enrolled earlier for same Bx">
+            <select name="disposition" id="disposition" class="form-control">
+              <option value="Hot">Hot</option>
+              <option value="Warm" selected>Warm</option>
+              <option value="Cold">Cold</option>
+            </select>
           </div>
 
           <!-- Comments -->

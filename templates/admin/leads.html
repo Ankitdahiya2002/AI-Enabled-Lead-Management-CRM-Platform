@@ -104,8 +104,9 @@
           <span class="{{ lead.priority | priority_class }}">{{ lead.priority or '—' }}</span>
         </td>
         <td>
-          {% if lead.agent_name %}
-            <span class="agent-tag">🎧 {{ lead.agent_name }}</span>
+          {% set display_agent = lead.agent_name | display_agent_name %}
+          {% if display_agent %}
+            <span class="agent-tag">🎧 {{ display_agent }}</span>
           {% else %}—{% endif %}
         </td>
         <td>
@@ -121,7 +122,12 @@
         <td style="text-align:center;">{{ lead.total_attempts or 0 }}</td>
         <td class="muted">{{ lead.updated_at | format_dt }}</td>
         <td>
-          <a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}" class="btn btn-ghost btn-sm">View →</a>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}" class="btn btn-ghost btn-sm">View →</a>
+            <form method="POST" action="{{ url_for('admin_leads_delete', lead_id=lead.id) }}" onsubmit="return confirm('Are you sure you want to delete this lead?');" style="display:inline;">
+              <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--danger);padding:4px 8px;border:none;background:none;cursor:pointer;" title="Delete Lead">🗑️</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% endfor %}
@@ -174,21 +180,32 @@
   z-index: 1000;
   transition: all 0.3s ease;
   width: 90%;
-  max-width: 800px;
+  max-width: 850px;
 ">
   <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
     <span>🗳️</span> Selected: <span id="selectedCount" style="color: var(--accent-1); font-weight: 800; font-size: 1.1rem;">0</span> lead(s)
   </div>
   
-  <form id="bulkAssignForm" method="POST" action="{{ url_for('admin_leads_assign') }}" style="display: flex; align-items: center; gap: 12px; margin-left: auto; width: 100%; max-width: 500px;">
-    <!-- Hidden inputs to preserve filters and page state -->
-    <input type="hidden" name="lead_ids" id="bulkLeadIds">
-    <input type="hidden" name="campaign_type" value="{{ campaign_type }}">
-    <input type="hidden" name="status" value="{{ status }}">
-    <input type="hidden" name="search" value="{{ search }}">
-    <input type="hidden" name="page" value="{{ page }}">
+  <div style="display: flex; align-items: center; gap: 16px; margin-left: auto;">
+    <!-- Bulk Delete Button Form -->
+    <form id="bulkDeleteForm" method="POST" action="{{ url_for('admin_leads_bulk_delete') }}" onsubmit="return confirm('Are you sure you want to delete the selected leads?');" style="display:inline;">
+      <input type="hidden" name="lead_ids" id="bulkDeleteLeadIds">
+      <button type="submit" class="btn btn-secondary btn-sm" style="background:var(--danger);color:white;border-color:var(--danger);height: 36px; padding: 0 16px; white-space: nowrap;">
+        🗑️ Delete Selected
+      </button>
+    </form>
 
-    <label class="form-label" style="margin-bottom:0; font-size: 0.82rem; color: var(--text-muted); font-weight: normal; white-space: nowrap;">Assign to:</label>
+    <div style="width:1px;height:24px;background:var(--border);"></div>
+
+    <form id="bulkAssignForm" method="POST" action="{{ url_for('admin_leads_assign') }}" style="display: flex; align-items: center; gap: 12px; max-width: 500px;">
+      <!-- Hidden inputs to preserve filters and page state -->
+      <input type="hidden" name="lead_ids" id="bulkLeadIds">
+      <input type="hidden" name="campaign_type" value="{{ campaign_type }}">
+      <input type="hidden" name="status" value="{{ status }}">
+      <input type="hidden" name="search" value="{{ search }}">
+      <input type="hidden" name="page" value="{{ page }}">
+
+      <label class="form-label" style="margin-bottom:0; font-size: 0.82rem; color: var(--text-muted); font-weight: normal; white-space: nowrap;">Assign to:</label>
     
     <div class="custom-multiselect" style="position: relative; width: 100%; max-width: 250px; user-select: none;">
       <div class="multiselect-select" onclick="toggleDropdown(event)" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 12px; background: var(--bg-input); font-size: 0.85rem; height: 36px; cursor: pointer; color: var(--text-primary);">
@@ -230,6 +247,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const bulkBar = document.getElementById('bulkActionBar');
   const selectedCount = document.getElementById('selectedCount');
   const bulkLeadIds = document.getElementById('bulkLeadIds');
+  const bulkDeleteLeadIds = document.getElementById('bulkDeleteLeadIds');
 
   function updateBulkBar() {
     const checked = document.querySelectorAll('.lead-checkbox:checked');
@@ -244,10 +262,16 @@ document.addEventListener('DOMContentLoaded', function() {
       // Collect IDs
       const ids = Array.from(checked).map(cb => cb.value);
       bulkLeadIds.value = ids.join(',');
+      if (bulkDeleteLeadIds) {
+        bulkDeleteLeadIds.value = ids.join(',');
+      }
     } else {
       // Hide sticky bar
       bulkBar.style.bottom = '-100px';
       bulkLeadIds.value = '';
+      if (bulkDeleteLeadIds) {
+        bulkDeleteLeadIds.value = '';
+      }
     }
   }
 

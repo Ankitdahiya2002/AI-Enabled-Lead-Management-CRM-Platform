@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}My Follow-Ups{% endblock %}
+{% block page_title %}Follow-Ups{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="{{ url_for('agent_dashboard') }}">Campaigns</a>
+  <span class="sep">›</span>
+  <span class="current">Follow-Ups</span>
+</div>
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>🔁 My Follow-Ups</h1>
+    <p>{{ leads | length }} follow-up lead{{ 's' if leads | length != 1 }} assigned to you</p>
+  </div>
+</div>
+
+<!-- Filters -->
+<form method="GET" action="{{ url_for('agent_followups') }}">
+  <div class="filters-bar">
+    <div class="search-bar">
+      <input type="text" name="search" placeholder="Search by name or phone..." value="{{ search }}">
+    </div>
+
+    <select name="campaign_type" class="form-control" style="width:auto;padding:8px 32px 8px 12px;">
+      <option value="">All Campaigns</option>
+      <option value="atpitch_sia"    {% if campaign_filter=='atpitch_sia' %}selected{% endif %}>📈 Atpitch SIA</option>
+      <option value="atpitch_sta"    {% if campaign_filter=='atpitch_sta' %}selected{% endif %}>📊 Atpitch STA</option>
+      <option value="atpitch_others" {% if campaign_filter=='atpitch_others' %}selected{% endif %}>🎯 Atpitch Others</option>
+      <option value="upsell"         {% if campaign_filter=='upsell' %}selected{% endif %}>⬆️ Upsell OB</option>
+      <option value="fp_l1"          {% if campaign_filter=='fp_l1' %}selected{% endif %}>💳 FP OB L1/High</option>
+      <option value="fp_l2"          {% if campaign_filter=='fp_l2' %}selected{% endif %}>🔄 FP OB L2/Low</option>
+    </select>
+
+    <select name="priority" class="form-control" style="width:auto;padding:8px 32px 8px 12px;">
+      <option value="">All Priorities</option>
+      <option value="P1" {% if priority_filter=='P1' %}selected{% endif %}>🔴 P1 — High</option>
+      <option value="P2" {% if priority_filter=='P2' %}selected{% endif %}>🟡 P2 — Medium</option>
+      <option value="P3" {% if priority_filter=='P3' %}selected{% endif %}>⚪ P3 — Low</option>
+    </select>
+
+    <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+    {% if search or campaign_filter or priority_filter %}
+      <a href="{{ url_for('agent_followups') }}" class="btn btn-ghost btn-sm">✕ Clear</a>
+    {% endif %}
+  </div>
+</form>
+
+<!-- Leads Table -->
+<div class="table-wrapper">
+  {% if leads %}
+  <table>
+    <thead>
+      <tr>
+        <th>Lead Name</th>
+        <th>Phone</th>
+        <th>Campaign</th>
+        <th>Priority</th>
+        <th>Scheduled Follow-up</th>
+        <th>Last Called</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for lead in leads %}
+      <tr style="cursor:pointer;" onclick="window.location='{{ url_for('agent_lead_detail', lead_id=lead.id) }}'">
+        <td>
+          <div style="font-weight:600;">{{ lead.lead_name or '—' }}</div>
+          {% if lead.bootcamp_title %}
+            <div style="font-size:0.75rem;color:var(--text-muted);">📚 {{ lead.bootcamp_title }}</div>
+          {% endif %}
+        </td>
+        <td class="phone-num">{{ lead.contact_no | mask_phone(user.role) }}</td>
+        <td>
+          <span class="badge badge-purple">{{ lead.campaign_type | campaign_label }}</span>
+        </td>
+        <td>
+          <span class="{{ lead.priority | priority_class }}">{{ lead.priority or '—' }}</span>
+        </td>
+        <td style="white-space: nowrap;">
+          {% if lead.follow_up_date %}
+            <div style="color:var(--warning);font-weight:700;display:flex;flex-direction:column;gap:2px;">
+              <span>📅 {{ lead.follow_up_date }}</span>
+              {% if lead.follow_up_time %}
+                <span style="font-size:0.78rem;opacity:0.9;">⏰ {{ lead.follow_up_time | format_time }}</span>
+              {% endif %}
+            </div>
+          {% else %}
+            <span style="color:var(--text-secondary);font-style:italic;font-size:0.85rem;">Not Scheduled</span>
+          {% endif %}
+        </td>
+        <td class="muted text-sm" style="white-space: nowrap;">
+          {{ lead.last_call_date | format_dt if lead.last_call_date else '—' }}
+        </td>
+        <td>
+          <div style="display:flex;gap:8px;" onclick="event.stopPropagation();">
+            <a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}" class="btn btn-ghost btn-sm">View Details</a>
+            <a href="{{ url_for('agent_call_log', lead_id=lead.id) }}" class="btn btn-primary btn-sm">📞 Log Call</a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state" style="margin-top:24px;">
+    <span class="empty-icon">📭</span>
+    <h3>No follow-up leads found</h3>
+    <p>Use the filters above or check back later when follow-ups are scheduled.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

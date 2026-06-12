@@ -38,6 +38,11 @@
     </div>
   </div>
   <div class="lead-hero-actions">
+    {% if user.role == 'admin' %}
+      <form method="POST" action="{{ url_for('admin_leads_delete', lead_id=lead.id) }}" onsubmit="return confirm('Are you sure you want to delete this lead?');" style="display:inline;margin-right:8px;">
+        <button type="submit" class="btn btn-secondary" style="background:var(--danger);color:white;border-color:var(--danger);">🗑️ Delete Lead</button>
+      </form>
+    {% endif %}
     {% if lead.final_status in ['Converted', 'Already Enrolled'] %}
       <button class="btn btn-secondary" style="opacity:0.5; cursor:not-allowed;" disabled>🚫 Blocked ({{ lead.final_status }})</button>
     {% else %}
@@ -79,7 +84,12 @@
         <div class="lead-info-item">
           <div class="lead-info-label">Agent</div>
           <div class="lead-info-value">
-            {% if lead.agent_name %}<span class="agent-tag">🎧 {{ lead.agent_name }}</span>{% else %}—{% endif %}
+            {% if lead.final_status == 'Converted' and lead.contacted_by %}
+              <span class="agent-tag">🎧 {{ lead.contacted_by }}</span>
+            {% else %}
+              {% set display_agent = lead.agent_name | display_agent_name %}
+              {% if display_agent %}<span class="agent-tag">🎧 {{ display_agent }}</span>{% else %}—{% endif %}
+            {% endif %}
           </div>
         </div>
         <div class="lead-info-item">
@@ -88,12 +98,7 @@
             {{ lead.total_attempts or 0 }}
           </div>
         </div>
-        {% if lead.joining_duration %}
-        <div class="lead-info-item">
-          <div class="lead-info-label">Joining Duration</div>
-          <div class="lead-info-value">{{ lead.joining_duration }}</div>
-        </div>
-        {% endif %}
+
         {% if lead.calling_for_upsell %}
         <div class="lead-info-item" style="grid-column:span 2;">
           <div class="lead-info-label">Calling For</div>

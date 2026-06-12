@@ -45,6 +45,13 @@
     <div class="stat-value">{{ stats.today_calls | default(0) }}</div>
     <div class="stat-label">Calls Today <span style="font-size:0.65rem;opacity:0.6;">▼</span></div>
   </div>
+
+  <!-- Overdue Follow-ups (>24h) — toggles detail -->
+  <div class="stat-card red stat-clickable" onclick="togglePanel('overduePanel')" style="cursor:pointer;" id="cardOverdue">
+    <div class="stat-icon red">⚠️</div>
+    <div class="stat-value">{{ stats.overdue_followups | default(0) }}</div>
+    <div class="stat-label">Overdue (>24h) <span style="font-size:0.65rem;opacity:0.6;">▼</span></div>
+  </div>
 </div>
 
 <!-- ── Drilldown panels (hidden by default) ─────────────────────────────── -->
@@ -70,7 +77,20 @@
       <td class="phone-num">{{ lead.contact_no }}</td>
       <td><span class="badge badge-purple">{{ lead.campaign_type | campaign_label }}</span></td>
       <td>{{ lead.priority or '—' }}</td>
-      <td>{{ lead.agent_name or '—' }}</td>
+      <td>
+        <form method="POST" action="{{ url_for('admin_leads_assign') }}" style="display:inline-block;margin:0;">
+          <input type="hidden" name="lead_ids" value="{{ lead.id }}">
+          <select name="agent_names" onchange="this.form.submit()" class="form-control" style="font-size:0.78rem;padding:4px 8px;width:auto;min-width:110px;border-color:var(--border-color);border-radius:6px;background-color:var(--bg-cream);">
+            <option value="">— Unassigned —</option>
+            {% for agent in agents %}
+              {% set display_n = agent.name | display_agent_name %}
+              <option value="{{ agent.name }}" {% if lead.agent_name and agent.name in lead.agent_name %}selected{% endif %}>
+                🎧 {{ display_n }}
+              </option>
+            {% endfor %}
+          </select>
+        </form>
+      </td>
       <td class="muted">{{ lead.updated_at | format_dt }}</td>
       <td><a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}" class="btn btn-ghost btn-sm">View →</a></td>
     </tr>
@@ -103,7 +123,20 @@
       <td class="phone-num">{{ lead.contact_no }}</td>
       <td><span class="badge badge-purple">{{ lead.campaign_type | campaign_label }}</span></td>
       <td>{{ lead.priority or '—' }}</td>
-      <td>{{ lead.agent_name or '—' }}</td>
+      <td>
+        <form method="POST" action="{{ url_for('admin_leads_assign') }}" style="display:inline-block;margin:0;">
+          <input type="hidden" name="lead_ids" value="{{ lead.id }}">
+          <select name="agent_names" onchange="this.form.submit()" class="form-control" style="font-size:0.78rem;padding:4px 8px;width:auto;min-width:110px;border-color:var(--border-color);border-radius:6px;background-color:var(--bg-cream);">
+            <option value="">— Unassigned —</option>
+            {% for agent in agents %}
+              {% set display_n = agent.name | display_agent_name %}
+              <option value="{{ agent.name }}" {% if lead.agent_name and agent.name in lead.agent_name %}selected{% endif %}>
+                🎧 {{ display_n }}
+              </option>
+            {% endfor %}
+          </select>
+        </form>
+      </td>
       <td>
         {% if lead.last_call_date %}
           <span style="color:var(--warning);font-weight:600;">{{ lead.last_call_date | format_dt }}</span>
@@ -116,6 +149,58 @@
   </table>
   {% else %}
   <div class="empty-state" style="padding:24px;"><span class="empty-icon">📭</span><p>No follow-up leads today</p></div>
+  {% endif %}
+</div>
+
+<!-- Overdue Follow Up Leads Panel -->
+<div id="overduePanel" class="drilldown-panel" style="display:none;">
+  <div class="drilldown-header">
+    <span>⚠️ Overdue Follow-Up Leads (>24 Hours Missed)</span>
+    <a href="{{ url_for('admin_leads', status='Follow Up') }}" class="btn btn-ghost btn-sm">View All Follow-Ups →</a>
+  </div>
+  {% if detail.overdue_followups %}
+  <table>
+    <thead><tr>
+      <th>Lead Name / Bootcamp</th><th>Phone</th><th>Campaign</th><th>Priority</th><th>Agent</th><th>Scheduled Follow-up</th><th>Time Overdue</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for lead in detail.overdue_followups %}
+    <tr>
+      <td>
+        <div style="font-weight:600;">{{ lead.lead_name or '—' }}</div>
+        {% if lead.bootcamp_title %}<div style="font-size:0.73rem;color:var(--text-muted);">📚 {{ lead.bootcamp_title }}</div>{% endif %}
+      </td>
+      <td class="phone-num">{{ lead.contact_no }}</td>
+      <td><span class="badge badge-purple">{{ lead.campaign_type | campaign_label }}</span></td>
+      <td>{{ lead.priority or '—' }}</td>
+      <td>
+        <form method="POST" action="{{ url_for('admin_leads_assign') }}" style="display:inline-block;margin:0;">
+          <input type="hidden" name="lead_ids" value="{{ lead.id }}">
+          <select name="agent_names" onchange="this.form.submit()" class="form-control" style="font-size:0.78rem;padding:4px 8px;width:auto;min-width:110px;border-color:var(--border-color);border-radius:6px;background-color:var(--bg-cream);">
+            <option value="">— Unassigned —</option>
+            {% for agent in agents %}
+              {% set display_n = agent.name | display_agent_name %}
+              <option value="{{ agent.name }}" {% if lead.agent_name and agent.name in lead.agent_name %}selected{% endif %}>
+                🎧 {{ display_n }}
+              </option>
+            {% endfor %}
+          </select>
+        </form>
+      </td>
+      <td style="color:var(--warning);font-weight:600;white-space:nowrap;">
+        <div>📅 {{ lead.follow_up_date }}</div>
+        {% if lead.follow_up_time %}<div>⏰ {{ lead.follow_up_time | format_time }}</div>{% endif %}
+      </td>
+      <td style="color:var(--danger);font-weight:700;">
+        {{ lead.hours_overdue }} hours
+      </td>
+      <td><a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}" class="btn btn-ghost btn-sm">View →</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state" style="padding:24px;"><span class="empty-icon">🎉</span><p>No overdue follow-up leads!</p></div>
   {% endif %}
 </div>
 
@@ -233,7 +318,7 @@
 {% block scripts %}
 <script>
 function togglePanel(id) {
-  const panels = ['convertedPanel', 'followUpPanel', 'callsTodayPanel'];
+  const panels = ['convertedPanel', 'followUpPanel', 'callsTodayPanel', 'overduePanel'];
   panels.forEach(pid => {
     const el = document.getElementById(pid);
     if (pid === id) {
