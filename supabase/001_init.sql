@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS public.leads (
     bootcamp_title TEXT NOT NULL,
     bootcamp_date TEXT,
     agent_name TEXT,
+    contacted_by TEXT,
     priority TEXT,  -- P1, P2, P3
     
     -- FP-specific fields

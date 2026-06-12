@@ -3,9 +3,13 @@
 {% block page_title %}Lead Detail{% endblock %}
 
 {% block top_actions %}
-  <a href="{{ url_for('agent_call_log', lead_id=lead.id) }}" class="btn btn-primary">
-    📞 Log Call #{{ (lead.total_attempts or 0) + 1 }}
-  </a>
+  {% if lead.final_status in ['Converted', 'Already Enrolled'] %}
+    <button class="btn btn-secondary btn-sm" style="opacity:0.5; cursor:not-allowed;" disabled>🚫 Contact Blocked</button>
+  {% else %}
+    <a href="{{ url_for('agent_call_log', lead_id=lead.id) }}" class="btn btn-primary">
+      📞 Log Call #{{ (lead.total_attempts or 0) + 1 }}
+    </a>
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -34,9 +38,13 @@
     </div>
   </div>
   <div class="lead-hero-actions">
-    <a href="{{ url_for('agent_call_log', lead_id=lead.id) }}" class="btn btn-primary">
-      📞 Log Call
-    </a>
+    {% if lead.final_status in ['Converted', 'Already Enrolled'] %}
+      <button class="btn btn-secondary" style="opacity:0.5; cursor:not-allowed;" disabled>🚫 Blocked ({{ lead.final_status }})</button>
+    {% else %}
+      <a href="{{ url_for('agent_call_log', lead_id=lead.id) }}" class="btn btn-primary">
+        📞 Log Call
+      </a>
+    {% endif %}
     {% if lead.final_status == 'Follow Up' %}
     <a href="{{ url_for('agent_followup', lead_id=lead.id) }}" class="btn btn-warning">
       🔁 Follow-Up Details
@@ -130,6 +138,12 @@
           <div class="lead-info-value">{{ lead.fp_date }}</div>
         </div>
         {% endif %}
+        {% if lead.fp_time %}
+        <div class="lead-info-item">
+          <div class="lead-info-label">FP Time</div>
+          <div class="lead-info-value">{{ lead.fp_time | format_time }}</div>
+        </div>
+        {% endif %}
         {% if lead.comment %}
         <div class="lead-info-item" style="grid-column:span 2;">
           <div class="lead-info-label">Note</div>
@@ -166,9 +180,11 @@
   <div>
     <div class="section-header">
       <span class="section-title">Call History ({{ calls | length }} attempt{{ 's' if calls | length != 1 }})</span>
+      {% if lead.final_status not in ['Converted', 'Already Enrolled'] %}
       <a href="{{ url_for('agent_call_log', lead_id=lead.id) }}" class="btn btn-primary btn-sm">
         + Log Call #{{ (lead.total_attempts or 0) + 1 }}
       </a>
+      {% endif %}
     </div>
 
     {% if calls %}

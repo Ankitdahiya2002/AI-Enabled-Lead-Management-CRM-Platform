@@ -298,7 +298,7 @@ def admin_export_report():
     cw.writerow([
         'Lead ID', 'Lead Name', 'Phone', 'Email', 'Campaign Type',
         'Bootcamp Title', 'Bootcamp Date', 'Priority', 'Assigned Agent',
-        'Final Status', 'Total Attempts (Calls)', 'Last Called At', 
+        'Final Status', 'Total Attempts (Calls)', 'Last Called At', 'Contacted By Agent',
         'Original Upload Amount', 'Original Payment Status', 'Original Payment Mode', 'Original Coupon Code',
         'Amount Paid on Conversion', 'Token Amount', 'Discount Amount', 'Bootcamp Price (Conversion)',
         'Payment Mode on Conversion', 'Payment Reference', 'Call History Summary'
@@ -370,6 +370,7 @@ def admin_export_report():
             lead.get('final_status') or '',
             total_calls,
             last_called_at,
+            lead.get('contacted_by') or '',
             lead.get('amount') or '',
             lead.get('payment_status') or '',
             lead.get('payment_method_type') or '',
@@ -417,6 +418,7 @@ def admin_upload():
             'extra_date':     request.form.get('extra_date', '').strip(),
             'extra_priority': request.form.get('extra_priority', '').strip(),
             'extra_bootcamp': request.form.get('extra_bootcamp', '').strip(),
+            'extra_time':     request.form.get('extra_time', '').strip(),
         }
 
         try:
@@ -436,10 +438,10 @@ def admin_upload():
                     agent_names = []
 
             if agent_names:
-                for index, lead in enumerate(leads):
+                all_agents_str = ", ".join(agent_names)
+                for lead in leads:
                     if not lead.get('agent_name'):
-                        assigned_agent = agent_names[index % len(agent_names)]
-                        lead['agent_name'] = assigned_agent
+                        lead['agent_name'] = all_agents_str
         except Exception as e:
             return jsonify({'success': False, 'error': f'Parse error: {str(e)}'}), 500
 
@@ -596,21 +598,13 @@ def admin_leads_assign():
                 .execute()
             flash(f'Successfully unassigned {len(lead_ids)} leads.', 'success')
         else:
-            # Round-robin distribution
-            agent_assignments = {name: [] for name in agent_names}
-            for index, lead_id in enumerate(lead_ids):
-                assigned_agent = agent_names[index % len(agent_names)]
-                agent_assignments[assigned_agent].append(lead_id)
-            
-            for agent, ids in agent_assignments.items():
-                if ids:
-                    supabase_admin.table('leads')\
-                        .update({'agent_name': agent})\
-                        .in_('id', ids)\
-                        .execute()
-            
-            summary = ", ".join([f"{agent} ({len(ids)})" for agent, ids in agent_assignments.items() if ids])
-            flash(f'Successfully distributed {len(lead_ids)} leads: {summary}.', 'success')
+            # Assign all selected agents to all selected leads
+            all_agents_str = ", ".join(agent_names)
+            supabase_admin.table('leads')\
+                .update({'agent_name': all_agents_str})\
+                .in_('id', lead_ids)\
+                .execute()
+            flash(f'Successfully assigned {len(lead_ids)} leads to {all_agents_str}.', 'success')
     except Exception as e:
         flash(f'Failed to assign leads: {e}', 'error')
         
@@ -880,10 +874,29 @@ def agent_call_log(lead_id):
         flash(f'Lead not found: {e}', 'error')
         return redirect(url_for('agent_dashboard'))
 
+    # Check if lead is already converted or enrolled
+    if lead.get('final_status') in ['Converted', 'Already Enrolled']:
+        flash('This lead is already converted or enrolled and cannot be contacted further.', 'error')
+        return redirect(url_for('agent_lead_detail', lead_id=lead_id))
+
     if request.method == 'POST':
         try:
             connected = request.form.get('connected') == 'true'
-            called_at_str = request.form.get('called_at', datetime.now(timezone.utc).isoformat())
+            # Parse datetime-local string (local IST) and convert to true UTC for database storage
+            called_at_val = request.form.get('called_at')
+            if called_at_val:
+                try:
+                    from datetime import timedelta
+                    dt_naive = datetime.fromisoformat(called_at_val)
+                    # Treat the naive input as local IST
+                    ist = timezone(timedelta(hours=5, minutes=30))
+                    dt_local = dt_naive.replace(tzinfo=ist)
+                    # Convert to UTC
+                    called_at_str = dt_local.astimezone(timezone.utc).isoformat()
+                except Exception:
+                    called_at_str = datetime.now(timezone.utc).isoformat()
+            else:
+                called_at_str = datetime.now(timezone.utc).isoformat()
 
             call_data = {
                 'lead_id': lead_id,
@@ -914,6 +927,15 @@ def agent_call_log(lead_id):
                     call_data['payment_reference'] = request.form.get('payment_reference', '')
 
             supabase_admin.table('call_attempts').insert(call_data).execute()
+
+            # Set contacted_by to the agent who logged the call
+            try:
+                supabase_admin.table('leads')\
+                    .update({'contacted_by': user['name']})\
+                    .eq('id', lead_id)\
+                    .execute()
+            except Exception as e:
+                app.logger.error(f"Error updating contacted_by on lead: {e}")
 
             # Optional Lead Transfer/Reassignment
             transfer_agent = request.form.get('transfer_agent', '').strip()
@@ -1077,7 +1099,39 @@ def format_dt(value):
             dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
         else:
             dt = value
+        if dt.tzinfo is not None:
+            from datetime import timedelta
+            ist = timezone(timedelta(hours=5, minutes=30))
+            dt = dt.astimezone(ist)
         return dt.strftime('%d %b %Y, %I:%M %p')
+    except Exception:
+        return str(value)
+
+
+@app.template_filter('format_time')
+def format_time(value):
+    if not value:
+        return '—'
+    try:
+        if isinstance(value, str):
+            parts = value.split(':')
+            if len(parts) >= 2:
+                h = int(parts[0])
+                m = int(parts[1])
+                ampm = 'AM' if h < 12 else 'PM'
+                h12 = h % 12
+                if h12 == 0:
+                    h12 = 12
+                return f"{h12:02d}:{m:02d} {ampm}"
+        elif hasattr(value, 'hour') and hasattr(value, 'minute'):
+            h = value.hour
+            m = value.minute
+            ampm = 'AM' if h < 12 else 'PM'
+            h12 = h % 12
+            if h12 == 0:
+                h12 = 12
+            return f"{h12:02d}:{m:02d} {ampm}"
+        return str(value)
     except Exception:
         return str(value)
 

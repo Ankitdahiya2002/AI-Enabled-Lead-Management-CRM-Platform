@@ -67,6 +67,7 @@
         <th>Campaign</th>
         <th>Priority</th>
         <th>Agent</th>
+        <th>Contacted By</th>
         <th>Status</th>
         <th>Calls</th>
         <th>Last Updated</th>
@@ -106,6 +107,13 @@
           {% if lead.agent_name %}
             <span class="agent-tag">🎧 {{ lead.agent_name }}</span>
           {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if lead.contacted_by %}
+            <span class="agent-tag" style="font-size:0.75rem;">🎧 {{ lead.contacted_by }}</span>
+          {% else %}
+            <span style="color:var(--text-muted);">—</span>
+          {% endif %}
         </td>
         <td>
           <span class="badge {{ lead.final_status | status_class }}">{{ lead.final_status }}</span>

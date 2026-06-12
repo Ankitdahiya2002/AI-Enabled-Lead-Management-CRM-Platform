@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS public.leads (
     bootcamp_title TEXT NOT NULL,
     bootcamp_date TEXT,
     agent_name TEXT,
+    contacted_by TEXT,
     priority TEXT,
     email TEXT,
     amount NUMERIC(10,2),

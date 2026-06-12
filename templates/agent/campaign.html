@@ -75,6 +75,7 @@
         <th>Status</th>
         <th>Attempts</th>
         <th>Last Called</th>
+        <th>Contacted By</th>
         <th>Action</th>
       </tr>
     </thead>
@@ -94,7 +95,12 @@
             <div style="font-size:0.75rem;color:var(--text-muted);">{{ lead.amount | inr }}</div>
           {% endif %}
         </td>
-        <td class="muted">{{ lead.bootcamp_date or '—' }}</td>
+        <td class="muted">
+          <div>{{ lead.bootcamp_date or '—' }}</div>
+          {% if (campaign_type == 'fp_l1' or campaign_type == 'fp_l2') and lead.fp_time %}
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">⏰ {{ lead.fp_time | format_time }}</div>
+          {% endif %}
+        </td>
         <td>
           <span class="{{ lead.priority | priority_class }}">{{ lead.priority or '—' }}</span>
         </td>
@@ -107,10 +113,21 @@
         <td class="muted text-sm">
           {{ lead.last_call_date | format_dt if lead.last_call_date else '—' }}
         </td>
+        <td>
+          {% if lead.contacted_by %}
+            <span class="agent-tag" style="font-size:0.75rem;">🎧 {{ lead.contacted_by }}</span>
+          {% else %}
+            <span style="color:var(--text-muted);">—</span>
+          {% endif %}
+        </td>
         <td onclick="event.stopPropagation()">
           <div style="display:flex;gap:6px;">
             <a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}" class="btn btn-ghost btn-sm">📋</a>
-            <a href="{{ url_for('agent_call_log', lead_id=lead.id) }}" class="btn btn-primary btn-sm">📞 Call</a>
+            {% if lead.final_status in ['Converted', 'Already Enrolled'] %}
+              <button class="btn btn-secondary btn-sm" style="opacity:0.5; cursor:not-allowed;" disabled>🚫 Blocked</button>
+            {% else %}
+              <a href="{{ url_for('agent_call_log', lead_id=lead.id) }}" class="btn btn-primary btn-sm">📞 Call</a>
+            {% endif %}
           </div>
         </td>
       </tr>

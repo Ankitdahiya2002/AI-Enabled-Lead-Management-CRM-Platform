@@ -49,19 +49,19 @@
         <label class="form-label">Assign to Agent(s) <span style="opacity:0.5;font-weight:400;">(Optional)</span></label>
         <div class="custom-multiselect" style="position: relative; width: 100%; user-select: none;">
           <div class="multiselect-select" onclick="toggleUploadDropdown(event)" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 10px 14px; background: var(--bg-elevated); font-size: 0.88rem; cursor: pointer; color: var(--text-primary); transition: border-color var(--t-fast);">
-            <span id="multiselectPlaceholder">— Auto-Assign to All Agents (Round-Robin) —</span>
+            <span id="multiselectPlaceholder">— Auto-Assign to All Agents —</span>
             <span style="font-size:0.65rem; color:var(--text-muted);">▼</span>
           </div>
           <div class="multiselect-dropdown" id="multiselectDropdown" style="display: none; position: absolute; top: 46px; left: 0; right: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 20px rgba(0,0,0,0.3); max-height: 250px; overflow-y: auto; z-index: 1000; padding: 6px 0;">
             {% for agent in agents %}
             <label class="multiselect-option agent-option" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 0.85rem; color: var(--text-primary); transition: background 0.15s; border-radius: 0;">
-              <input type="checkbox" name="agent_names" value="{{ agent.name }}" class="agent-checkbox" onchange="handleUploadAgentCheckboxChange()" style="cursor:pointer; transform:scale(1.05);">
+               <input type="checkbox" name="agent_names" value="{{ agent.name }}" class="agent-checkbox" onchange="handleUploadAgentCheckboxChange()" style="cursor:pointer; transform:scale(1.05);">
               <span>🎧 {{ agent.name }}</span>
             </label>
             {% endfor %}
           </div>
         </div>
-        <div class="form-hint">Leads will be distributed round-robin among selected agents</div>
+        <div class="form-hint">Leads will be assigned to all selected agents</div>
       </div>
 
       <!-- ── Batch defaults & overrides (admin fills these in) ──────────── -->
@@ -75,10 +75,15 @@
           📋 BATCH DEFAULTS & OVERRIDES
         </div>
 
-        <div class="form-row">
+        <div class="form-row-3">
           <div class="form-group">
             <label class="form-label">📅 Lead / Bootcamp Date <span style="color:var(--danger);">*</span></label>
             <input type="date" name="extra_date" id="extra_date" class="form-control" required>
+            <div class="form-hint">Applied to every lead in this file</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">⏰ Bootcamp Time</label>
+            <input type="time" name="extra_time" id="extra_time" class="form-control">
             <div class="form-hint">Applied to every lead in this file</div>
           </div>
           <div class="form-group">
@@ -293,7 +298,7 @@ function handleUploadAgentCheckboxChange() {
   if (checked.length > 0) {
     placeholder.textContent = `🎧 ${checked.join(', ')}`;
   } else {
-    placeholder.textContent = '— Auto-Assign to All Agents (Round-Robin) —';
+    placeholder.textContent = '— Auto-Assign to All Agents —';
   }
 }
 

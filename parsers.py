@@ -154,6 +154,36 @@ def parse_date(val):
     return None
 
 
+def parse_time(val):
+    """Try to parse a time string into HH:MM:SS format."""
+    if not val:
+        return None
+    val = str(val).strip()
+    for fmt in ["%I:%M %p", "%I:%M:%S %p", "%H:%M:%S", "%H:%M", "%I %p"]:
+        try:
+            return datetime.strptime(val, fmt).time().isoformat()
+        except ValueError:
+            continue
+    m = re.match(r'^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$', val, re.IGNORECASE)
+    if m:
+        h = int(m.group(1))
+        m_val = int(m.group(2))
+        s_val = int(m.group(3)) if m.group(3) else 0
+        ampm = m.group(4)
+        if ampm:
+            ampm = ampm.upper()
+            if ampm == 'PM' and h < 12:
+                h += 12
+            elif ampm == 'AM' and h == 12:
+                h = 0
+        try:
+            from datetime import time
+            return time(h, m_val, s_val).isoformat()
+        except ValueError:
+            pass
+    return None
+
+
 def read_csv_text(file_content: bytes, delimiter=',') -> list[dict]:
     """Read CSV bytes into list of dicts."""
     text = file_content.decode('utf-8-sig', errors='replace')
@@ -190,6 +220,7 @@ def parse_atpitch(
     admin_date     = clean_cell_value(extra.get('extra_date', ''))
     admin_priority = clean_cell_value(extra.get('extra_priority', ''))
     admin_bootcamp = clean_cell_value(extra.get('extra_bootcamp', ''))
+    admin_time     = clean_cell_value(extra.get('extra_time', ''))
 
     delimiter = detect_delimiter(file_content)
     rows = read_csv_text(file_content, delimiter)
@@ -217,7 +248,9 @@ def parse_atpitch(
             campaign_type = detect_lead_type_atpitch(bootcamp_title)
 
             bootcamp_date_str = get_flexible(row, 'calling_date', 'date', 'dummy_date_time', 'created_on')
-            bootcamp_date = admin_date or parse_date(bootcamp_date_str) or bootcamp_date_str or None
+            bootcamp_date = parse_date(bootcamp_date_str) or admin_date or bootcamp_date_str or None
+            bootcamp_time_str = get_flexible(row, 'fptime', 'fp_time', 'start_time', 'time')
+            bootcamp_time = parse_time(bootcamp_time_str) or parse_time(admin_time) or None
 
             lead = {
                 "unique_key": unique_key,
@@ -227,6 +260,7 @@ def parse_atpitch(
                 "contact_no": phone,
                 "bootcamp_title": bootcamp_title,
                 "bootcamp_date": bootcamp_date,
+                "fp_time": bootcamp_time,
                 "agent_name": get_flexible(row, 'agent', 'agent_name', 'owner_user_name', 'owner'),
                 "priority": admin_priority or get_flexible(row, 'priority') or None,
                 "calling_for_upsell": get_flexible(row, 'calling_for_upsell'),
@@ -260,6 +294,7 @@ def parse_upsell(
     admin_date     = clean_cell_value(extra.get('extra_date', ''))
     admin_priority = clean_cell_value(extra.get('extra_priority', ''))
     admin_bootcamp = clean_cell_value(extra.get('extra_bootcamp', ''))
+    admin_time     = clean_cell_value(extra.get('extra_time', ''))
 
     delimiter = detect_delimiter(file_content)
     rows = read_csv_text(file_content, delimiter)
@@ -287,7 +322,9 @@ def parse_upsell(
             unique_key = make_unique_key(phone, bootcamp_title)
 
             bootcamp_date_str = get_flexible(row, 'date', 'dummy_date_time', 'created_on')
-            bootcamp_date = admin_date or parse_date(bootcamp_date_str) or bootcamp_date_str or None
+            bootcamp_date = parse_date(bootcamp_date_str) or admin_date or bootcamp_date_str or None
+            bootcamp_time_str = get_flexible(row, 'fptime', 'fp_time', 'start_time', 'time')
+            bootcamp_time = parse_time(bootcamp_time_str) or parse_time(admin_time) or None
 
             lead = {
                 "unique_key": unique_key,
@@ -297,6 +334,7 @@ def parse_upsell(
                 "contact_no": phone,
                 "bootcamp_title": bootcamp_title,
                 "bootcamp_date": bootcamp_date,
+                "fp_time": bootcamp_time,
                 "agent_name": get_flexible(row, 'agent', 'agent_name', 'owner_user_name', 'owner'),
                 "priority": admin_priority or get_flexible(row, 'priority') or None,
                 "final_status": get_flexible(row, 'final_status', 'status') or "Pending",
@@ -328,6 +366,7 @@ def parse_failed_pending(
     admin_date     = clean_cell_value(extra.get('extra_date', ''))
     admin_priority = clean_cell_value(extra.get('extra_priority', ''))
     admin_bootcamp = clean_cell_value(extra.get('extra_bootcamp', ''))
+    admin_time     = clean_cell_value(extra.get('extra_time', ''))
 
     delimiter = detect_delimiter(file_content)
     rows = read_csv_text(file_content, delimiter)
@@ -371,7 +410,9 @@ def parse_failed_pending(
                     return None
 
             bootcamp_date_str = get_flexible(row, 'fpdate', 'fp_date', 'start_date', 'dummy_date_time', 'created_on', 'date')
-            bootcamp_date = admin_date or parse_date(bootcamp_date_str) or bootcamp_date_str or None
+            bootcamp_date = parse_date(bootcamp_date_str) or admin_date or bootcamp_date_str or None
+            bootcamp_time_str = get_flexible(row, 'fptime', 'fp_time', 'start_time', 'time')
+            bootcamp_time = parse_time(bootcamp_time_str) or parse_time(admin_time) or None
 
             lead = {
                 'unique_key':          unique_key,
@@ -389,6 +430,7 @@ def parse_failed_pending(
                 'payment_method_type': get_flexible(row, 'paymentmethodtype', 'payment_method_type', 'payment_type'),
                 'fp_date':             bootcamp_date,
                 'bootcamp_date':       bootcamp_date,
+                'fp_time':             bootcamp_time,
                 'agent_name':          get_flexible(row, 'agent', 'owner_user_name', 'owner_user_id', 'owner'),
                 'priority':            admin_priority or get_flexible(row, 'priority', 'follow_up_priority') or None,
                 'final_status':        'Pending',
@@ -462,6 +504,7 @@ def parse_leadsquared(
     admin_date     = clean_cell_value(extra.get('extra_date', ''))
     admin_priority = clean_cell_value(extra.get('extra_priority', ''))
     admin_bootcamp = clean_cell_value(extra.get('extra_bootcamp', ''))
+    admin_time     = clean_cell_value(extra.get('extra_time', ''))
 
     delimiter = detect_delimiter(file_content)
     rows = read_csv_text(file_content, delimiter)
@@ -514,9 +557,11 @@ def parse_leadsquared(
 
             # ── Dates ────────────────────────────────────────────────────
             bootcamp_date_str = get_flexible(row, 'Start Date', 'Dummy Date Time', 'Created On', 'Date')
-            start_date = admin_date or parse_date(bootcamp_date_str) or bootcamp_date_str or None
+            start_date = parse_date(bootcamp_date_str) or admin_date or bootcamp_date_str or None
             end_date   = parse_date(get_flexible(row, 'End Date'))
             next_fu    = parse_date(get_flexible(row, 'Next Follow Up'))
+            bootcamp_time_str = get_flexible(row, 'fptime', 'fp_time', 'start_time', 'time')
+            bootcamp_time = parse_time(bootcamp_time_str) or parse_time(admin_time) or None
 
             # ── Agent / Owner ─────────────────────────────────────────────
             agent_name = get_flexible(row, 'Owner User Name', 'Owner', 'Agent')
@@ -560,6 +605,7 @@ def parse_leadsquared(
                 "coupon_code":         get_flexible(row, 'Coupon Code'),
                 "payment_method_type": payment_type or get_flexible(row, 'Payment Mode'),
                 "fp_date":             start_date,
+                "fp_time":             bootcamp_time,
                 "agent_name":          agent_name,
                 "priority":            admin_priority or get_flexible(row, 'Follow Up Priority') or None,
                 "final_status":        final_status,
@@ -619,6 +665,7 @@ def parse_simple(
     admin_date     = extra.get('extra_date', '').strip()
     admin_priority = extra.get('extra_priority', '').strip()
     admin_bootcamp = extra.get('extra_bootcamp', '').strip()  # optional override
+    admin_time     = extra.get('extra_time', '').strip()
 
     delimiter = detect_delimiter(file_content)
     text = file_content.decode('utf-8-sig', errors='replace')
@@ -677,6 +724,7 @@ def parse_simple(
             campaign_type = detect_lead_type_atpitch(bootcamp_title)
 
             unique_key = make_unique_key(phone, bootcamp_title)
+            bootcamp_time = parse_time(admin_time) or None
 
             lead = {
                 'unique_key':    unique_key,
@@ -686,12 +734,13 @@ def parse_simple(
                 'contact_no':    phone,
                 'bootcamp_title': bootcamp_title,
                 'bootcamp_date': admin_date or None,
+                'fp_time':       bootcamp_time,
                 'priority':      admin_priority or None,
                 'final_status':  'Pending',
                 'uploaded_by':   uploaded_by,
                 'upload_batch':  batch_id,
                 'raw_data':      {'phone': phone, 'raw_name_col': col_b,
-                                   'admin_date': admin_date, 'admin_priority': admin_priority},
+                                   'admin_date': admin_date, 'admin_priority': admin_priority, 'admin_time': admin_time},
             }
             leads.append(lead)
 
