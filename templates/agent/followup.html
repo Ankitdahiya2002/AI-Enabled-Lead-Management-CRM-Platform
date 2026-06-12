@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}Follow-Up — {{ lead.lead_name or lead.contact_no }}{% endblock %}
+{% block page_title %}Follow-Up Details{% endblock %}
+
+{% block top_actions %}
+  <a href="{{ url_for('agent_call_log', lead_id=lead.id) }}" class="btn btn-primary btn-sm">
+    📞 Log Next Call
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="{{ url_for('agent_dashboard') }}">Campaigns</a>
+  <span class="sep">›</span>
+  <a href="{{ url_for('agent_campaign', campaign_type=lead.campaign_type) }}">{{ campaign_label }}</a>
+  <span class="sep">›</span>
+  <a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}">{{ lead.lead_name or lead.contact_no }}</a>
+  <span class="sep">›</span>
+  <span class="current">Follow-Up / Conversion</span>
+</div>
+
+<!-- Lead Hero (compact) -->
+<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-xl);padding:20px;margin-bottom:24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+  <div class="lead-avatar">{{ (lead.lead_name or 'L')[0].upper() }}</div>
+  <div style="flex:1;min-width:0;">
+    <div style="font-size:1.1rem;font-weight:800;">{{ lead.lead_name or '—' }}</div>
+    <div style="color:var(--text-secondary);font-size:0.85rem;">
+      📞 <span class="phone-num">{{ lead.contact_no }}</span>
+      &nbsp;·&nbsp;
+      {{ lead.bootcamp_title }}
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <span class="badge {{ lead.final_status | status_class }}">{{ lead.final_status }}</span>
+    {% if lead.priority %}<span class="{{ lead.priority | priority_class }}">{{ lead.priority }}</span>{% endif %}
+    <span class="badge badge-neutral">{{ lead.total_attempts or 0 }} calls</span>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;" class="followup-grid">
+
+  <!-- Left column -->
+  <div>
+    <!-- Conversion Details (if converted) -->
+    {% if conversion %}
+    <div class="card mb-6" style="border-color:rgba(16,185,129,0.3);background:rgba(16,185,129,0.03);">
+      <div class="card-header">
+        <span class="card-title" style="color:var(--success);">💰 Conversion Summary</span>
+        <span class="badge badge-success">CONVERTED</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div class="stat-card green" style="padding:14px;">
+          <div class="stat-label">Amount Paid</div>
+          <div class="stat-value" style="font-size:1.4rem;color:var(--success);">
+            {{ conversion.amount_paid | inr if conversion.amount_paid else '—' }}
+          </div>
+        </div>
+        <div class="stat-card green" style="padding:14px;">
+          <div class="stat-label">Bootcamp Price</div>
+          <div class="stat-value" style="font-size:1.4rem;">
+            {{ conversion.bootcamp_price | inr if conversion.bootcamp_price else '—' }}
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size:0.85rem;">
+        {% if conversion.discount_amount %}
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+          <span style="color:var(--text-muted);">Discount Applied</span>
+          <span style="color:var(--warning);font-weight:600;">- {{ conversion.discount_amount | inr }}</span>
+        </div>
+        {% endif %}
+        {% if conversion.token_amount %}
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+          <span style="color:var(--text-muted);">Token Amount</span>
+          <span style="font-weight:600;">{{ conversion.token_amount | inr }}</span>
+        </div>
+        {% endif %}
+        {% if conversion.payment_mode %}
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+          <span style="color:var(--text-muted);">Payment Mode</span>
+          <span style="font-weight:600;text-transform:uppercase;">{{ conversion.payment_mode }}</span>
+        </div>
+        {% endif %}
+        {% if conversion.payment_reference %}
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);">
+          <span style="color:var(--text-muted);">TXN Reference</span>
+          <span style="font-weight:600;font-family:monospace;font-size:0.82rem;">{{ conversion.payment_reference }}</span>
+        </div>
+        {% endif %}
+        <div style="display:flex;justify-content:space-between;padding:8px 0;">
+          <span style="color:var(--text-muted);">Converted On</span>
+          <span style="font-weight:600;">{{ conversion.called_at | format_dt }}</span>
+        </div>
+        {% if conversion.comments %}
+        <div style="margin-top:10px;padding:10px;background:var(--bg-elevated);border-radius:var(--radius-sm);">
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:4px;">NOTES</div>
+          {{ conversion.comments }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Current Follow-Up Status -->
+    {% set pending_followups = follow_ups | selectattr('follow_up_done', 'equalto', false) | list %}
+    {% if pending_followups %}
+    <div class="card mb-6" style="border-color:rgba(245,158,11,0.3);background:rgba(245,158,11,0.03);">
+      <div class="card-header">
+        <span class="card-title" style="color:var(--warning);">🔔 Pending Follow-Ups</span>
+        <span class="badge badge-warning">{{ pending_followups | length }}</span>
+      </div>
+      {% for fu in pending_followups %}
+      <div style="background:var(--bg-elevated);border-radius:var(--radius);padding:14px;margin-bottom:10px;">
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;">Attempt #{{ fu.attempt_number }}</div>
+        <div style="font-weight:600;font-size:0.95rem;color:var(--warning);">
+          📅 {{ fu.follow_up_date }}{% if fu.follow_up_time %} at {{ fu.follow_up_time }}{% endif %}
+        </div>
+        {% if fu.comments %}
+        <div style="margin-top:6px;font-size:0.82rem;color:var(--text-secondary);">{{ fu.comments }}</div>
+        {% endif %}
+        <a href="{{ url_for('agent_call_log', lead_id=lead.id) }}" class="btn btn-warning btn-sm" style="margin-top:10px;">
+          📞 Call Now
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Lead Stats -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📊 Lead Statistics</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div style="text-align:center;padding:12px;background:var(--bg-elevated);border-radius:var(--radius);">
+          <div style="font-size:1.8rem;font-weight:800;color:var(--text-accent);">{{ calls | length }}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);">Total Attempts</div>
+        </div>
+        <div style="text-align:center;padding:12px;background:var(--bg-elevated);border-radius:var(--radius);">
+          <div style="font-size:1.8rem;font-weight:800;color:var(--success);">
+            {{ calls | selectattr('connected', 'equalto', true) | list | length }}
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-muted);">Connected</div>
+        </div>
+        <div style="text-align:center;padding:12px;background:var(--bg-elevated);border-radius:var(--radius);">
+          <div style="font-size:1.8rem;font-weight:800;color:var(--danger);">
+            {{ calls | selectattr('connected', 'equalto', false) | list | length }}
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-muted);">Not Connected</div>
+        </div>
+        <div style="text-align:center;padding:12px;background:var(--bg-elevated);border-radius:var(--radius);">
+          <div style="font-size:1.8rem;font-weight:800;color:var(--warning);">{{ follow_ups | length }}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);">Follow-Ups</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Full Call Timeline -->
+  <div>
+    <div class="section-header">
+      <span class="section-title">Complete Call History</span>
+      <a href="{{ url_for('agent_call_log', lead_id=lead.id) }}" class="btn btn-primary btn-sm">+ Log Call</a>
+    </div>
+
+    <div class="call-timeline">
+      {% for call in calls %}
+      <div class="call-item {% if not call.connected %}not-connected{% elif call.call_status == 'converted' %}converted{% elif call.call_status == 'follow_up' %}follow-up{% else %}connected{% endif %}">
+        <div class="call-card">
+          <div class="call-header">
+            <span class="call-attempt-num">#{{ call.attempt_number }}</span>
+            {% if call.connected %}
+              <span class="badge badge-success" style="font-size:0.7rem;">✅ Connected</span>
+            {% else %}
+              <span class="badge badge-danger" style="font-size:0.7rem;">❌ Not Connected</span>
+            {% endif %}
+            {% if call.call_status %}
+            <span class="badge badge-neutral" style="font-size:0.7rem;">
+              {% if call.call_status == 'follow_up' %}🔁{% elif call.call_status == 'converted' %}💰{% endif %}
+              {{ call.call_status | replace('_', ' ') | title }}
+            </span>
+            {% endif %}
+            <span class="call-timestamp">{{ call.called_at | format_dt }}</span>
+          </div>
+          <div class="call-body">
+            {% if call.connected %}
+              {% if call.disposition %}
+              <div class="call-detail"><strong>Disposition:</strong> {{ call.disposition }}</div>
+              {% endif %}
+              {% if call.comments %}
+              <div class="call-detail"><strong>Comments:</strong> {{ call.comments }}</div>
+              {% endif %}
+              {% if call.follow_up_date %}
+              <div class="call-detail" style="color:var(--warning);">
+                <strong>Follow-up:</strong> {{ call.follow_up_date }}{% if call.follow_up_time %} at {{ call.follow_up_time }}{% endif %}
+              </div>
+              {% endif %}
+              {% if call.amount_paid %}
+              <div class="call-detail" style="color:var(--success);">
+                <strong>Converted:</strong> {{ call.amount_paid | inr }} paid via {{ call.payment_mode or '—' }}
+              </div>
+              {% endif %}
+            {% else %}
+              <div class="call-detail">
+                <strong>Reason:</strong>
+                {% set r = call.not_connected_reason %}
+                {% if r == 'not_connected' %}Not Connected
+                {% elif r == 'switched_off' %}Switched Off
+                {% elif r == 'ringing_no_answer' %}Ringing, No Answer
+                {% elif r == 'busy' %}Line Busy
+                {% elif r == 'internet_issue' %}Internet Issue
+                {% elif r == 'call_failure' %}Call Failure
+                {% else %}{{ r or '—' }}{% endif %}
+              </div>
+            {% endif %}
+            <div class="mt-1 text-sm text-muted">
+              by <span class="agent-tag">🎧 {{ call.agent_name or 'Agent' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="empty-state" style="padding:30px;">
+        <span class="empty-icon">📞</span>
+        <h3>No calls logged</h3>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+<style>
+@media (max-width: 900px) {
+  .followup-grid { grid-template-columns: 1fr !important; }
+}
+</style>
+{% endblock %}

@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+{% block title %}All Leads{% endblock %}
+{% block page_title %}All Leads{% endblock %}
+
+{% block top_actions %}
+  <a href="{{ url_for('admin_upload') }}" class="btn btn-primary btn-sm">📤 Upload</a>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>All Leads</h1>
+    <p>{{ total }} leads across all campaigns</p>
+  </div>
+</div>
+
+<!-- Filters -->
+<form method="GET" action="{{ url_for('admin_leads') }}">
+  <div class="filters-bar">
+    <div class="search-bar">
+      <input type="text" name="search" placeholder="Search by name or phone..." value="{{ search }}">
+    </div>
+
+    <select name="campaign_type" class="form-control" style="width:auto;padding:8px 32px 8px 12px;">
+      <option value="">All Campaigns</option>
+      <option value="atpitch_sia"    {% if campaign_type=='atpitch_sia' %}selected{% endif %}>Atpitch SIA</option>
+      <option value="atpitch_sta"    {% if campaign_type=='atpitch_sta' %}selected{% endif %}>Atpitch STA</option>
+      <option value="atpitch_others" {% if campaign_type=='atpitch_others' %}selected{% endif %}>Atpitch Others</option>
+      <option value="upsell"         {% if campaign_type=='upsell' %}selected{% endif %}>Upsell OB</option>
+      <option value="fp_l1"          {% if campaign_type=='fp_l1' %}selected{% endif %}>FP L1/High</option>
+      <option value="fp_l2"          {% if campaign_type=='fp_l2' %}selected{% endif %}>FP L2/Low</option>
+    </select>
+
+    <select name="status" class="form-control" style="width:auto;padding:8px 32px 8px 12px;">
+      <option value="">All Statuses</option>
+      <option value="Pending"        {% if status=='Pending' %}selected{% endif %}>Pending</option>
+      <option value="Follow Up"      {% if status=='Follow Up' %}selected{% endif %}>Follow Up</option>
+      <option value="Converted"      {% if status=='Converted' %}selected{% endif %}>Converted</option>
+      <option value="Already Enrolled" {% if status=='Already Enrolled' %}selected{% endif %}>Already Enrolled</option>
+      <option value="Not Interested" {% if status=='Not Interested' %}selected{% endif %}>Not Interested</option>
+      <option value="Discarded"      {% if status=='Discarded' %}selected{% endif %}>Discarded</option>
+    </select>
+
+    <button type="submit" class="btn btn-secondary btn-sm">🔍 Filter</button>
+    {% if search or campaign_type or status %}
+      <a href="{{ url_for('admin_leads') }}" class="btn btn-ghost btn-sm">✕ Clear</a>
+    {% endif %}
+  </div>
+</form>
+
+<!-- Table -->
+<div class="table-wrapper">
+  <div class="table-header">
+    <span class="table-title">Leads</span>
+    <span style="color:var(--text-muted);font-size:0.8rem;">Showing page {{ page }} of {{ total_pages }}</span>
+  </div>
+
+  {% if leads %}
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 40px; text-align: center; padding-left: 16px;">
+          <input type="checkbox" id="selectAllLeads" style="cursor: pointer; transform: scale(1.15);">
+        </th>
+        <th>Lead Name / Bootcamp</th>
+        <th>Phone</th>
+        <th>Campaign</th>
+        <th>Priority</th>
+        <th>Agent</th>
+        <th>Status</th>
+        <th>Calls</th>
+        <th>Last Updated</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for lead in leads %}
+      <tr>
+        <td style="text-align: center; padding-left: 16px;">
+          <input type="checkbox" class="lead-checkbox" value="{{ lead.id }}" style="cursor: pointer; transform: scale(1.15);">
+        </td>
+        <td style="min-width:180px;">
+          {% set display_name = lead.lead_name or '' %}
+          {% set bootcamp     = lead.bootcamp_title or '' %}
+          {% if display_name %}
+            <div style="font-weight:600;color:var(--text-primary);">{{ display_name }}</div>
+            {% if bootcamp %}
+              <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;
+                          max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
+                   title="{{ bootcamp }}">📚 {{ bootcamp }}</div>
+            {% endif %}
+          {% elif bootcamp %}
+            <div style="font-weight:600;color:var(--text-primary);">{{ bootcamp }}</div>
+          {% else %}
+            <span style="color:var(--text-muted);">—</span>
+          {% endif %}
+        </td>
+        <td class="phone-num">{{ lead.contact_no }}</td>
+        <td>
+          <span class="badge badge-purple">{{ lead.campaign_type | campaign_label }}</span>
+        </td>
+        <td>
+          <span class="{{ lead.priority | priority_class }}">{{ lead.priority or '—' }}</span>
+        </td>
+        <td>
+          {% if lead.agent_name %}
+            <span class="agent-tag">🎧 {{ lead.agent_name }}</span>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          <span class="badge {{ lead.final_status | status_class }}">{{ lead.final_status }}</span>
+        </td>
+        <td style="text-align:center;">{{ lead.total_attempts or 0 }}</td>
+        <td class="muted">{{ lead.updated_at | format_dt }}</td>
+        <td>
+          <a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}" class="btn btn-ghost btn-sm">View →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Pagination -->
+  {% if total_pages > 1 %}
+  <div class="pagination">
+    {% if page > 1 %}
+      <a href="{{ url_for('admin_leads', page=page-1, campaign_type=campaign_type, status=status, search=search) }}" class="page-btn">‹</a>
+    {% endif %}
+    {% for p in range(1, total_pages+1) %}
+      {% if p == page or (p >= page-2 and p <= page+2) or p == 1 or p == total_pages %}
+        <a href="{{ url_for('admin_leads', page=p, campaign_type=campaign_type, status=status, search=search) }}"
+           class="page-btn {% if p == page %}active{% endif %}">{{ p }}</a>
+      {% elif p == page-3 or p == page+3 %}
+        <span class="page-btn" style="cursor:default;">…</span>
+      {% endif %}
+    {% endfor %}
+    {% if page < total_pages %}
+      <a href="{{ url_for('admin_leads', page=page+1, campaign_type=campaign_type, status=status, search=search) }}" class="page-btn">›</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="empty-state">
+    <span class="empty-icon">📭</span>
+    <h3>No leads found</h3>
+    <p>Try adjusting your filters or upload new leads</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Sticky Bulk Action Bar -->
+<div class="bulk-action-bar" id="bulkActionBar" style="
+  position: fixed;
+  bottom: -100px; /* Hidden by default */
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  border-radius: var(--radius);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  z-index: 1000;
+  transition: all 0.3s ease;
+  width: 90%;
+  max-width: 800px;
+">
+  <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+    <span>🗳️</span> Selected: <span id="selectedCount" style="color: var(--accent-1); font-weight: 800; font-size: 1.1rem;">0</span> lead(s)
+  </div>
+  
+  <form id="bulkAssignForm" method="POST" action="{{ url_for('admin_leads_assign') }}" style="display: flex; align-items: center; gap: 12px; margin-left: auto; width: 100%; max-width: 500px;">
+    <!-- Hidden inputs to preserve filters and page state -->
+    <input type="hidden" name="lead_ids" id="bulkLeadIds">
+    <input type="hidden" name="campaign_type" value="{{ campaign_type }}">
+    <input type="hidden" name="status" value="{{ status }}">
+    <input type="hidden" name="search" value="{{ search }}">
+    <input type="hidden" name="page" value="{{ page }}">
+
+    <label class="form-label" style="margin-bottom:0; font-size: 0.82rem; color: var(--text-muted); font-weight: normal; white-space: nowrap;">Assign to:</label>
+    
+    <div class="custom-multiselect" style="position: relative; width: 100%; max-width: 250px; user-select: none;">
+      <div class="multiselect-select" onclick="toggleDropdown(event)" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 12px; background: var(--bg-input); font-size: 0.85rem; height: 36px; cursor: pointer; color: var(--text-primary);">
+        <span id="multiselectPlaceholder" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px;">— Select Agent(s) —</span>
+        <span style="font-size:0.65rem; color:var(--text-muted);">▼</span>
+      </div>
+      <div class="multiselect-dropdown" id="multiselectDropdown" style="display: none; position: absolute; bottom: 42px; left: 0; right: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 -4px 20px rgba(0,0,0,0.3); max-height: 250px; overflow-y: auto; z-index: 1000; padding: 6px 0;">
+        
+        <!-- Unassign Option -->
+        <label class="multiselect-option" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 0.82rem; color: var(--danger); transition: background 0.15s;">
+          <input type="checkbox" id="unassignActionCheckbox" name="unassign_action" value="yes" onchange="handleUnassignChange(this)" style="cursor:pointer; transform:scale(1.05);">
+          <span>⚠️ Unassign Leads (Set Empty)</span>
+        </label>
+        
+        <div style="border-top:1px solid var(--border); margin: 4px 0;"></div>
+        
+        <!-- Agent list with checkboxes -->
+        {% for agent in agents %}
+        <label class="multiselect-option agent-option" style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; font-size: 0.82rem; color: var(--text-primary); transition: background 0.15s;">
+          <input type="checkbox" name="agent_names" value="{{ agent.name }}" class="agent-checkbox" onchange="handleAgentCheckboxChange()" style="cursor:pointer; transform:scale(1.05);">
+          <span>🎧 {{ agent.name }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    
+    <button type="submit" class="btn btn-primary btn-sm" style="height: 36px; padding: 0 16px; white-space: nowrap;">
+      Apply Action
+    </button>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const selectAll = document.getElementById('selectAllLeads');
+  const checkboxes = document.querySelectorAll('.lead-checkbox');
+  const bulkBar = document.getElementById('bulkActionBar');
+  const selectedCount = document.getElementById('selectedCount');
+  const bulkLeadIds = document.getElementById('bulkLeadIds');
+
+  function updateBulkBar() {
+    const checked = document.querySelectorAll('.lead-checkbox:checked');
+    const count = checked.length;
+    
+    selectedCount.textContent = count;
+    
+    if (count > 0) {
+      // Show sticky bar
+      bulkBar.style.bottom = '24px';
+      
+      // Collect IDs
+      const ids = Array.from(checked).map(cb => cb.value);
+      bulkLeadIds.value = ids.join(',');
+    } else {
+      // Hide sticky bar
+      bulkBar.style.bottom = '-100px';
+      bulkLeadIds.value = '';
+    }
+  }
+
+  if (selectAll) {
+    selectAll.addEventListener('change', function() {
+      checkboxes.forEach(cb => {
+        cb.checked = selectAll.checked;
+      });
+      updateBulkBar();
+    });
+  }
+
+  checkboxes.forEach(cb => {
+    cb.addEventListener('change', function() {
+      // Update selectAll state
+      if (selectAll) {
+        const checkedCount = document.querySelectorAll('.lead-checkbox:checked').length;
+        selectAll.checked = (checkedCount === checkboxes.length);
+      }
+      updateBulkBar();
+    });
+  });
+
+  const bulkForm = document.getElementById('bulkAssignForm');
+  if (bulkForm) {
+    bulkForm.addEventListener('submit', function(e) {
+      const unassignChecked = document.getElementById('unassignActionCheckbox').checked;
+      const checkedAgents = document.querySelectorAll('.agent-checkbox:checked').length;
+      if (!unassignChecked && checkedAgents === 0) {
+        e.preventDefault();
+        alert('Please select at least one agent or choose to unassign.');
+      }
+    });
+  }
+});
+
+function toggleDropdown(event) {
+  event.stopPropagation();
+  const dropdown = document.getElementById('multiselectDropdown');
+  dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+}
+
+function handleUnassignChange(unassignCheckbox) {
+  const agentCheckboxes = document.querySelectorAll('.agent-checkbox');
+  const placeholder = document.getElementById('multiselectPlaceholder');
+  
+  if (unassignCheckbox.checked) {
+    agentCheckboxes.forEach(cb => {
+      cb.checked = false;
+      cb.disabled = true;
+    });
+    placeholder.textContent = '⚠️ Unassign Leads';
+  } else {
+    agentCheckboxes.forEach(cb => {
+      cb.disabled = false;
+    });
+    placeholder.textContent = '— Select Agent(s) —';
+  }
+}
+
+function handleAgentCheckboxChange() {
+  const agentCheckboxes = document.querySelectorAll('.agent-checkbox');
+  const unassignCheckbox = document.getElementById('unassignActionCheckbox');
+  const placeholder = document.getElementById('multiselectPlaceholder');
+  
+  const checkedAgents = [];
+  agentCheckboxes.forEach(cb => {
+    if (cb.checked) {
+      checkedAgents.push(cb.value);
+    }
+  });
+  
+  if (checkedAgents.length > 0) {
+    unassignCheckbox.checked = false;
+    placeholder.textContent = `🎧 ${checkedAgents.join(', ')}`;
+  } else {
+    placeholder.textContent = '— Select Agent(s) —';
+  }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  const dropdown = document.getElementById('multiselectDropdown');
+  const container = document.querySelector('.custom-multiselect');
+  if (dropdown && container && !container.contains(e.target)) {
+    dropdown.style.display = 'none';
+  }
+});
+</script>
+
+<style>
+.multiselect-option:hover {
+  background-color: var(--bg-elevated) !important;
+}
+</style>
+{% endblock %}

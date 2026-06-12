@@ -1,0 +1,434 @@
+{% extends "base.html" %}
+{% block title %}Upload Leads{% endblock %}
+{% block page_title %}Upload Leads{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>Upload Lead Files</h1>
+    <p>Import leads from CSV files for each campaign type</p>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;" class="upload-grid">
+
+  <!-- Upload Form -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">📤 Upload New File</span>
+    </div>
+
+    <form id="uploadForm" enctype="multipart/form-data">
+      <div class="form-group">
+        <label class="form-label" for="campaign_type">Campaign Type</label>
+        <select name="campaign_type" id="campaign_type" class="form-control" required>
+          <option value="">— Select Campaign —</option>
+          <optgroup label="⭐ LeadSquared CRM Export">
+            <option value="leadsquared">🔗 LeadSquared Export (Auto-Categorize)</option>
+          </optgroup>
+          <optgroup label="📋 Simple Format (Phone + Name)">
+            <option value="simple">📋 Simple — phone | name | Bootcamp</option>
+          </optgroup>
+          <optgroup label="Atpitch">
+            <option value="atpitch_sia">📈 Atpitch SIA (Super Investing Arena)</option>
+            <option value="atpitch_sta">📊 Atpitch STA (Stock Trading Arena)</option>
+            <option value="atpitch_others">🎯 Atpitch Others</option>
+          </optgroup>
+          <optgroup label="Upsell">
+            <option value="upsell">⬆️ Upsell OB</option>
+          </optgroup>
+          <optgroup label="Failed Pending">
+            <option value="fp_l1">💳 FP OB — L1 / L1 High</option>
+            <option value="fp_l2">🔄 FP OB — L2 / L1 Low</option>
+          </optgroup>
+        </select>
+        <div class="form-hint" id="campaignHint"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Assign to Agent(s) <span style="opacity:0.5;font-weight:400;">(Optional)</span></label>
+        <div class="custom-multiselect" style="position: relative; width: 100%; user-select: none;">
+          <div class="multiselect-select" onclick="toggleUploadDropdown(event)" style="display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 10px 14px; background: var(--bg-elevated); font-size: 0.88rem; cursor: pointer; color: var(--text-primary); transition: border-color var(--t-fast);">
+            <span id="multiselectPlaceholder">— Auto-Assign to All Agents (Round-Robin) —</span>
+            <span style="font-size:0.65rem; color:var(--text-muted);">▼</span>
+          </div>
+          <div class="multiselect-dropdown" id="multiselectDropdown" style="display: none; position: absolute; top: 46px; left: 0; right: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 20px rgba(0,0,0,0.3); max-height: 250px; overflow-y: auto; z-index: 1000; padding: 6px 0;">
+            {% for agent in agents %}
+            <label class="multiselect-option agent-option" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 0.85rem; color: var(--text-primary); transition: background 0.15s; border-radius: 0;">
+              <input type="checkbox" name="agent_names" value="{{ agent.name }}" class="agent-checkbox" onchange="handleUploadAgentCheckboxChange()" style="cursor:pointer; transform:scale(1.05);">
+              <span>🎧 {{ agent.name }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="form-hint">Leads will be distributed round-robin among selected agents</div>
+      </div>
+
+      <!-- ── Batch defaults & overrides (admin fills these in) ──────────── -->
+      <div id="simpleExtraFields" style="display:none;
+           background:rgba(139,92,246,0.06);
+           border:1px solid rgba(139,92,246,0.2);
+           border-radius:var(--radius);
+           padding:16px 18px;
+           margin-bottom:4px;">
+        <div style="font-size:0.8rem;font-weight:700;color:var(--text-accent);margin-bottom:14px;letter-spacing:0.05em;">
+          📋 BATCH DEFAULTS & OVERRIDES
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">📅 Lead / Bootcamp Date <span style="color:var(--danger);">*</span></label>
+            <input type="date" name="extra_date" id="extra_date" class="form-control" required>
+            <div class="form-hint">Applied to every lead in this file</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">🔴 Priority</label>
+            <select name="extra_priority" id="extra_priority" class="form-control">
+              <option value="">— Select Priority —</option>
+              <option value="P1">🔴 P1 — High</option>
+              <option value="P2">🟡 P2 — Medium</option>
+              <option value="P3">⚪ P3 — Low</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">🎓 Bootcamp Name Override <span style="opacity:0.5;font-weight:400;">(optional)</span></label>
+          <input type="text" name="extra_bootcamp" id="extra_bootcamp" class="form-control"
+                 placeholder="Leave blank to auto-detect from file (e.g. Master Numerology June 9)">
+          <div class="form-hint">Only needed if the CSV header doesn't contain the bootcamp name</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">CSV File</label>
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" name="file" id="fileInput" accept=".csv,.tsv,.txt">
+          <span class="upload-icon">📁</span>
+          <div class="upload-title">Drop your CSV file here</div>
+          <div class="upload-sub">or click to browse</div>
+          <div class="upload-formats">
+            <span class="upload-format-tag">CSV</span>
+            <span class="upload-format-tag">TSV</span>
+            <span class="upload-format-tag">TXT</span>
+          </div>
+        </div>
+        <div id="fileNameDisplay" style="display:none;margin-top:10px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-size:0.85rem;display:flex;align-items:center;gap:8px;">
+          <span>📄</span>
+          <span id="fileName"></span>
+          <button type="button" id="clearFile" style="margin-left:auto;background:none;border:none;color:var(--danger);cursor:pointer;">✕</button>
+        </div>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="upload-progress" id="uploadProgress">
+        <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;">
+          <span id="progressLabel">Uploading...</span>
+          <span id="progressPct">0%</span>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="progressBar"></div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full btn-lg" id="uploadBtn" style="margin-top:8px;" disabled>
+        📤 Upload & Import
+      </button>
+    </form>
+
+    <!-- Upload Result -->
+    <div class="upload-result" id="uploadResult">
+      <div style="font-weight:700;font-size:1rem;margin-bottom:4px;" id="resultTitle"></div>
+      <div class="upload-result-grid" id="resultGrid"></div>
+      <div id="resultErrors" style="margin-top:12px;display:none;">
+        <div style="font-size:0.78rem;color:var(--danger);font-weight:600;">⚠️ Some rows had errors</div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Info Panel -->
+  <div>
+    <!-- File format guide -->
+    <div class="card mb-6">
+      <div class="card-header">
+        <span class="card-title">📋 Expected File Formats</span>
+      </div>
+
+      <div id="formatGuide">
+        <div class="format-info" id="fmt-default">
+          <p style="color:var(--text-muted);font-size:0.85rem;">Select a campaign type to see the expected columns</p>
+        </div>
+
+        <div class="format-info hidden" id="fmt-atpitch">
+          <div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:8px;font-weight:600;">Atpitch CSV Columns:</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);line-height:1.8;">
+            Name · Contact No. · Priority · Lead Name · joining_duration ·
+            Calling For Upsell · Calling Date · Agent · Status · Disposition ·
+            Comments · Attempt · Follow Up Status 1 · Follow Up Comments 1 ...
+          </div>
+          <div style="margin-top:12px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:var(--radius-sm);padding:10px;font-size:0.78rem;">
+            <strong style="color:var(--text-accent);">Auto-categorization:</strong><br>
+            SIA → "Super Investing", "Model Portfolio" in Lead Name<br>
+            STA → "Stock Trading", "Options", "Derivatives" in Lead Name<br>
+            Others → Everything else
+          </div>
+        </div>
+
+        <div class="format-info hidden" id="fmt-upsell">
+          <div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:8px;font-weight:600;">Upsell CSV Columns:</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);line-height:1.8;">
+            name · phone · Lead Name · Bx · Date · Agent · Priority ·
+            Final Status · 1st Call Date · 1st Call Status · 1st Call Disposition ·
+            1st Call Comments ...
+          </div>
+        </div>
+
+        <div class="format-info hidden" id="fmt-fp">
+          <div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:8px;font-weight:600;">Failed Pending CSV Columns:</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);line-height:1.8;">
+            lead name · phone · name · email · amount · status · CourseLevel ·
+            comment · couponCode · bootcampTitle · paymentMethodType ·
+            fpDate · fpTime · Agent · Lead type ...
+          </div>
+          <div style="margin-top:12px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:var(--radius-sm);padding:10px;font-size:0.78rem;">
+            <strong style="color:#4ade80;">Auto-categorization:</strong><br>
+            FP L1 / High → CourseLevel: L1 or L1_High<br>
+            FP L2 / Low → CourseLevel: L2 or L1_Low
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dedup info -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🔒 Duplicate Prevention</span>
+      </div>
+      <div style="font-size:0.83rem;color:var(--text-secondary);line-height:1.7;">
+        <p>Each lead is uniquely identified by:</p>
+        <div style="background:var(--bg-elevated);border-radius:var(--radius-sm);padding:10px;margin:10px 0;font-family:monospace;font-size:0.8rem;color:var(--text-accent);">
+          phone_number + bootcamp_title
+        </div>
+        <p>If a lead with the same key already exists, it will be <strong>skipped</strong> and counted as a duplicate — not overwritten.</p>
+      </div>
+    </div>
+
+    <!-- Recent uploads mini list -->
+    <div class="card" style="margin-top:16px;">
+      <div class="card-header">
+        <span class="card-title">📁 Recent Uploads</span>
+        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-ghost btn-sm">View All</a>
+      </div>
+      <p style="color:var(--text-muted);font-size:0.83rem;">Check the Admin Dashboard for full upload history.</p>
+    </div>
+  </div>
+
+</div>
+
+<style>
+  @media (max-width: 900px) {
+    .upload-grid { grid-template-columns: 1fr !important; }
+  }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Campaign type change: show/hide extra fields + hints ───────────────────
+const campaignHints = {
+  leadsquared:    '🔗 Auto-categorizes into FP / Upsell / Atpitch by reading the Opportunity Name column',
+  simple:         '📋 Two-column format: phone + "name | Bootcamp". Fill in Date & Priority below.',
+  atpitch_sia:    'Super Investing Arena leads — campaign auto-detected from Lead Name',
+  atpitch_sta:    'Stock Trading Arena leads — campaign auto-detected from Lead Name',
+  atpitch_others: 'All other Atpitch leads',
+  upsell:         'Upsell outbound campaign leads',
+  fp_l1:          'Failed Pending — Level 1 / High ticket leads',
+  fp_l2:          'Failed Pending — Level 2 / Low ticket leads',
+};
+const formatMap = {
+  leadsquared: 'leadsquared', simple: 'simple',
+  atpitch_sia: 'atpitch', atpitch_sta: 'atpitch', atpitch_others: 'atpitch',
+  upsell: 'upsell', fp_l1: 'fp', fp_l2: 'fp',
+};
+
+document.getElementById('campaign_type').addEventListener('change', function() {
+  const val = this.value;
+  // Hint text
+  document.getElementById('campaignHint').textContent = campaignHints[val] || '';
+  // Show/hide simple format extra fields
+  document.getElementById('simpleExtraFields').style.display =
+    (val !== '') ? 'block' : 'none';
+
+  // Date is only required if campaign type is simple
+  const dateInput = document.getElementById('extra_date');
+  if (val === 'simple') {
+    dateInput.required = true;
+  } else {
+    dateInput.required = false;
+  }
+
+  // Show format guide panel
+  document.querySelectorAll('.format-info').forEach(el => el.classList.add('hidden'));
+  const fmt = formatMap[val];
+  if (fmt) document.getElementById('fmt-' + fmt)?.classList.remove('hidden');
+  else document.getElementById('fmt-default')?.classList.remove('hidden');
+  checkReady();
+});
+
+// Custom multiselect dropdown functions
+function toggleUploadDropdown(event) {
+  event.stopPropagation();
+  const dropdown = document.getElementById('multiselectDropdown');
+  dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+}
+
+function handleUploadAgentCheckboxChange() {
+  const checkboxes = document.querySelectorAll('.agent-checkbox');
+  const placeholder = document.getElementById('multiselectPlaceholder');
+  const checked = [];
+  checkboxes.forEach(cb => {
+    if (cb.checked) checked.push(cb.value);
+  });
+  if (checked.length > 0) {
+    placeholder.textContent = `🎧 ${checked.join(', ')}`;
+  } else {
+    placeholder.textContent = '— Auto-Assign to All Agents (Round-Robin) —';
+  }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  const dropdown = document.getElementById('multiselectDropdown');
+  const container = document.querySelector('.custom-multiselect');
+  if (dropdown && container && !container.contains(e.target)) {
+    dropdown.style.display = 'none';
+  }
+});
+
+// ── File input & drag-drop ─────────────────────────────────────────────────
+const fileInput  = document.getElementById('fileInput');
+const uploadZone = document.getElementById('uploadZone');
+
+fileInput.addEventListener('change', function() {
+  if (this.files[0]) showFile(this.files[0].name);
+});
+
+uploadZone.addEventListener('dragover',  e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', ()=> uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) {
+    fileInput.files = e.dataTransfer.files;
+    showFile(e.dataTransfer.files[0].name);
+  }
+});
+
+function showFile(name) {
+  document.getElementById('fileName').textContent = name;
+  document.getElementById('fileNameDisplay').style.display = 'flex';
+  checkReady();
+}
+
+document.getElementById('clearFile').addEventListener('click', function() {
+  fileInput.value = '';
+  document.getElementById('fileNameDisplay').style.display = 'none';
+  document.getElementById('uploadBtn').disabled = true;
+});
+
+function checkReady() {
+  const hasCampaign = document.getElementById('campaign_type').value;
+  const hasFile     = fileInput.files && fileInput.files[0];
+  document.getElementById('uploadBtn').disabled = !(hasCampaign && hasFile);
+}
+
+// ── Upload submit ──────────────────────────────────────────────────────────
+document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const formData = new FormData(this);
+  const btn      = document.getElementById('uploadBtn');
+  const bar      = document.getElementById('progressBar');
+  const pctEl    = document.getElementById('progressPct');
+  const labelEl  = document.getElementById('progressLabel');
+
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Processing...';
+  document.getElementById('uploadProgress').classList.add('visible');
+
+  const phases = [
+    { pct: 15, label: '📂 Reading file...',             delay: 300  },
+    { pct: 35, label: '🔍 Parsing rows...',             delay: 800  },
+    { pct: 55, label: '🔑 Checking duplicates...',      delay: 1400 },
+    { pct: 75, label: '☁️  Uploading to database...',   delay: 2000 },
+    { pct: 88, label: '💾 Saving batch...',             delay: 3000 },
+  ];
+  phases.forEach(({ pct, label, delay }) => {
+    setTimeout(() => {
+      if (btn.disabled) {
+        bar.style.width = pct + '%';
+        pctEl.textContent = pct + '%';
+        labelEl.textContent = label;
+      }
+    }, delay);
+  });
+
+  try {
+    const resp = await fetch('/admin/upload', { method: 'POST', body: formData });
+    const data = await resp.json();
+    bar.style.width = '100%';
+    pctEl.textContent = '100%';
+    labelEl.textContent = data.success ? '✅ Complete!' : '❌ Failed';
+    showResult(data, formData.get('campaign_type'));
+  } catch (err) {
+    bar.style.width = '100%';
+    labelEl.textContent = '❌ Error';
+    showResultError('Network error: ' + err.message);
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '📤 Upload & Import';
+});
+
+function showResult(data, campaignType) {
+  const result = document.getElementById('uploadResult');
+  result.classList.add('visible');
+  document.getElementById('resultTitle').innerHTML = data.success
+    ? `<span style="color:var(--success);">✅ Upload complete!</span>`
+    : `<span style="color:var(--danger);">❌ ${data.error}</span>`;
+
+  if (data.success) {
+    document.getElementById('resultGrid').innerHTML = `
+      <div class="upload-result-item"><div class="upload-result-val">${data.total}</div><div class="upload-result-label">Total Rows</div></div>
+      <div class="upload-result-item"><div class="upload-result-val" style="color:var(--success);">${data.inserted}</div><div class="upload-result-label">✅ New Leads</div></div>
+      <div class="upload-result-item"><div class="upload-result-val" style="color:var(--warning);">${data.duplicates}</div><div class="upload-result-label">⏭ Skipped</div></div>
+      <div class="upload-result-item"><div class="upload-result-val" style="color:var(--danger);">${(data.parse_errors||0)+(data.insert_errors||0)}</div><div class="upload-result-label">❌ Errors</div></div>
+    `;
+    const errDiv = document.getElementById('resultErrors');
+    errDiv.style.display = 'block';
+    errDiv.innerHTML = `
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="/admin/leads?campaign_type=${campaignType}" class="btn btn-primary btn-sm">📋 View Leads →</a>
+        <button onclick="resetUploadForm()" class="btn btn-secondary btn-sm">📤 Upload Another</button>
+      </div>`;
+  }
+}
+
+function showResultError(msg) {
+  const result = document.getElementById('uploadResult');
+  result.classList.add('visible');
+  document.getElementById('resultTitle').textContent = '❌ ' + msg;
+}
+
+function resetUploadForm() {
+  document.getElementById('uploadResult').classList.remove('visible');
+  document.getElementById('uploadProgress').classList.remove('visible');
+  document.getElementById('progressBar').style.width = '0%';
+  document.getElementById('progressPct').textContent = '0%';
+  document.getElementById('progressLabel').textContent = 'Uploading...';
+  document.getElementById('fileNameDisplay').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('uploadBtn').disabled = true;
+}
+</script>
+{% endblock %}

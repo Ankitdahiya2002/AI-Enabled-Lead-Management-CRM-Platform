@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}TFU CRM{% endblock %} — LeadSquared</title>
+  <meta name="description" content="TFU LeadSquared CRM Dashboard — Manage leads, calls, and conversions">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="app-layout">
+
+    <!-- ── Sidebar ── -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-mark">
+          <div class="logo-icon">📊</div>
+          TFU CRM
+        </div>
+        <div class="logo-sub">LeadSquared Dashboard</div>
+      </div>
+
+      <nav class="sidebar-nav">
+        {% if session.get('role') == 'admin' %}
+          <div class="nav-section-label">Admin</div>
+          <a href="{{ url_for('admin_dashboard') }}"
+             class="nav-item {% if request.endpoint == 'admin_dashboard' %}active{% endif %}">
+            <span class="nav-icon">🏠</span> Dashboard
+          </a>
+          <a href="{{ url_for('admin_upload') }}"
+             class="nav-item {% if request.endpoint == 'admin_upload' %}active{% endif %}">
+            <span class="nav-icon">📤</span> Upload Leads
+          </a>
+          <a href="{{ url_for('admin_leads') }}"
+             class="nav-item {% if request.endpoint == 'admin_leads' %}active{% endif %}">
+            <span class="nav-icon">👥</span> All Leads
+          </a>
+          <a href="{{ url_for('admin_agents') }}"
+             class="nav-item {% if request.endpoint == 'admin_agents' %}active{% endif %}">
+            <span class="nav-icon">🎧</span> Agents
+          </a>
+          <hr class="divider" style="margin: 8px 0;">
+          <div class="nav-section-label">Campaigns</div>
+        {% else %}
+          <div class="nav-section-label">My Campaigns</div>
+        {% endif %}
+
+        {% set sidebar_campaigns = [
+          ('atpitch_sia',    '📈', 'Atpitch SIA'),
+          ('atpitch_sta',    '📊', 'Atpitch STA'),
+          ('atpitch_others', '🎯', 'Atpitch Others'),
+          ('upsell',         '⬆️', 'Upsell OB'),
+          ('fp_l1',          '💳', 'FP OB L1/High'),
+          ('fp_l2',          '🔄', 'FP OB L2/Low'),
+        ] %}
+        {% for ctype, icon, label in sidebar_campaigns %}
+          <a href="{{ url_for('agent_campaign', campaign_type=ctype) }}"
+             class="nav-item {% if request.args.get('campaign_type') == ctype or (request.view_args and request.view_args.get('campaign_type') == ctype) %}active{% endif %}">
+            <span class="nav-icon">{{ icon }}</span> {{ label }}
+          </a>
+        {% endfor %}
+      </nav>
+
+      <div class="sidebar-user">
+        <div class="user-avatar">{{ session.get('name', 'U')[0].upper() }}</div>
+        <div class="user-info">
+          <div class="user-name">{{ session.get('name', 'User') }}</div>
+          <div class="user-role">{{ session.get('role', 'agent') }}</div>
+        </div>
+        <a href="{{ url_for('logout') }}" class="logout-btn" title="Logout">⏻</a>
+      </div>
+    </aside>
+
+    <!-- ── Main Content ── -->
+    <div class="main-content">
+      <header class="top-bar">
+        <button class="btn btn-ghost btn-icon" id="sidebarToggle" style="display:none">☰</button>
+        <span class="top-bar-title">{% block page_title %}{% endblock %}</span>
+        <div class="top-bar-actions">
+          {% block top_actions %}{% endblock %}
+        </div>
+      </header>
+
+      <main class="page-content">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <!-- Flash messages -->
+  <div class="flash-messages" id="flashMessages">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}" id="flash-{{ loop.index }}">
+          <span>{% if category == 'success' %}✅{% elif category == 'error' %}❌{% else %}ℹ️{% endif %}</span>
+          {{ message }}
+          <span class="flash-close" onclick="this.parentElement.remove()">✕</span>
+        </div>
+      {% endfor %}
+    {% endwith %}
+  </div>
+
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

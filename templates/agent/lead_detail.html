@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block title %}{{ lead.lead_name or lead.contact_no }}{% endblock %}
+{% block page_title %}Lead Detail{% endblock %}
+
+{% block top_actions %}
+  <a href="{{ url_for('agent_call_log', lead_id=lead.id) }}" class="btn btn-primary">
+    📞 Log Call #{{ (lead.total_attempts or 0) + 1 }}
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="{{ url_for('agent_dashboard') }}">Campaigns</a>
+  <span class="sep">›</span>
+  <a href="{{ url_for('agent_campaign', campaign_type=lead.campaign_type) }}">{{ campaign_label }}</a>
+  <span class="sep">›</span>
+  <span class="current">{{ lead.lead_name or lead.contact_no }}</span>
+</div>
+
+<!-- Lead Hero Card -->
+<div class="lead-hero">
+  <div class="lead-avatar">{{ (lead.lead_name or 'L')[0].upper() }}</div>
+  <div class="lead-hero-info">
+    <div class="lead-hero-name">{{ lead.lead_name or '—' }}</div>
+    <div class="lead-hero-sub">
+      📞 <span class="phone-num">{{ lead.contact_no }}</span>
+      {% if lead.email %} &nbsp;·&nbsp; ✉️ {{ lead.email }}{% endif %}
+    </div>
+    <div class="lead-hero-tags">
+      <span class="badge {{ lead.final_status | status_class }}">{{ lead.final_status }}</span>
+      {% if lead.priority %}<span class="{{ lead.priority | priority_class }}">{{ lead.priority }}</span>{% endif %}
+      <span class="badge badge-purple">{{ lead.campaign_type | campaign_label }}</span>
+      {% if lead.lead_type %}<span class="badge badge-neutral">{{ lead.lead_type }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="lead-hero-actions">
+    <a href="{{ url_for('agent_call_log', lead_id=lead.id) }}" class="btn btn-primary">
+      📞 Log Call
+    </a>
+    {% if lead.final_status == 'Follow Up' %}
+    <a href="{{ url_for('agent_followup', lead_id=lead.id) }}" class="btn btn-warning">
+      🔁 Follow-Up Details
+    </a>
+    {% endif %}
+    {% if lead.final_status == 'Converted' %}
+    <a href="{{ url_for('agent_followup', lead_id=lead.id) }}" class="btn btn-success">
+      ✅ Conversion Details
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1.5fr;gap:24px;" class="detail-grid">
+
+  <!-- Left: Lead Information -->
+  <div>
+    <!-- Bootcamp Details -->
+    <div class="card mb-6">
+      <div class="card-header">
+        <span class="card-title">🎓 Bootcamp Details</span>
+      </div>
+      <div class="lead-info-grid">
+        <div class="lead-info-item">
+          <div class="lead-info-label">Bootcamp</div>
+          <div class="lead-info-value">{{ lead.bootcamp_title or '—' }}</div>
+        </div>
+        <div class="lead-info-item">
+          <div class="lead-info-label">Date</div>
+          <div class="lead-info-value">{{ lead.bootcamp_date or '—' }}</div>
+        </div>
+        <div class="lead-info-item">
+          <div class="lead-info-label">Agent</div>
+          <div class="lead-info-value">
+            {% if lead.agent_name %}<span class="agent-tag">🎧 {{ lead.agent_name }}</span>{% else %}—{% endif %}
+          </div>
+        </div>
+        <div class="lead-info-item">
+          <div class="lead-info-label">Total Calls</div>
+          <div class="lead-info-value" style="font-size:1.2rem;font-weight:800;color:var(--text-accent);">
+            {{ lead.total_attempts or 0 }}
+          </div>
+        </div>
+        {% if lead.joining_duration %}
+        <div class="lead-info-item">
+          <div class="lead-info-label">Joining Duration</div>
+          <div class="lead-info-value">{{ lead.joining_duration }}</div>
+        </div>
+        {% endif %}
+        {% if lead.calling_for_upsell %}
+        <div class="lead-info-item" style="grid-column:span 2;">
+          <div class="lead-info-label">Calling For</div>
+          <div class="lead-info-value" style="font-size:0.83rem;color:var(--text-secondary);">{{ lead.calling_for_upsell }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- FP-specific fields -->
+    {% if lead.campaign_type in ['fp_l1', 'fp_l2'] %}
+    <div class="card mb-6">
+      <div class="card-header">
+        <span class="card-title">💳 Payment Info</span>
+      </div>
+      <div class="lead-info-grid">
+        <div class="lead-info-item">
+          <div class="lead-info-label">Amount</div>
+          <div class="lead-info-value" style="font-size:1.1rem;font-weight:700;color:var(--success);">{{ lead.amount | inr }}</div>
+        </div>
+        <div class="lead-info-item">
+          <div class="lead-info-label">Payment Status</div>
+          <div class="lead-info-value">{{ lead.payment_status or '—' }}</div>
+        </div>
+        <div class="lead-info-item">
+          <div class="lead-info-label">Course Level</div>
+          <div class="lead-info-value">{{ lead.course_level or '—' }}</div>
+        </div>
+        <div class="lead-info-item">
+          <div class="lead-info-label">Payment Method</div>
+          <div class="lead-info-value">{{ lead.payment_method_type or '—' }}</div>
+        </div>
+        {% if lead.coupon_code %}
+        <div class="lead-info-item">
+          <div class="lead-info-label">Coupon Code</div>
+          <div class="lead-info-value">{{ lead.coupon_code }}</div>
+        </div>
+        {% endif %}
+        {% if lead.fp_date %}
+        <div class="lead-info-item">
+          <div class="lead-info-label">FP Date</div>
+          <div class="lead-info-value">{{ lead.fp_date }}</div>
+        </div>
+        {% endif %}
+        {% if lead.comment %}
+        <div class="lead-info-item" style="grid-column:span 2;">
+          <div class="lead-info-label">Note</div>
+          <div class="lead-info-value" style="font-size:0.83rem;color:var(--text-secondary);">{{ lead.comment }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Timestamps -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🕐 Timeline</span>
+      </div>
+      <div style="font-size:0.82rem;color:var(--text-secondary);">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+          <span>Lead Created</span>
+          <span style="color:var(--text-primary);">{{ lead.created_at | format_dt }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+          <span>Last Updated</span>
+          <span style="color:var(--text-primary);">{{ lead.updated_at | format_dt }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;">
+          <span>Last Called</span>
+          <span style="color:var(--text-primary);">{{ lead.last_call_date | format_dt if lead.last_call_date else '—' }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Call History Timeline -->
+  <div>
+    <div class="section-header">
+      <span class="section-title">Call History ({{ calls | length }} attempt{{ 's' if calls | length != 1 }})</span>
+      <a href="{{ url_for('agent_call_log', lead_id=lead.id) }}" class="btn btn-primary btn-sm">
+        + Log Call #{{ (lead.total_attempts or 0) + 1 }}
+      </a>
+    </div>
+
+    {% if calls %}
+    <div class="call-timeline">
+      {% for call in calls | reverse %}
+      <div class="call-item {% if not call.connected %}not-connected{% elif call.call_status == 'converted' %}converted{% elif call.call_status == 'follow_up' %}follow-up{% else %}connected{% endif %}">
+        <div class="call-card">
+          <div class="call-header">
+            <span class="call-attempt-num">Attempt #{{ call.attempt_number }}</span>
+            {% if call.connected %}
+              <span class="badge badge-success">✅ Connected</span>
+            {% else %}
+              <span class="badge badge-danger">❌ Not Connected</span>
+            {% endif %}
+            {% if call.call_status %}
+              <span class="badge {{ call.call_status | replace('_', ' ') | title | status_class }}">
+                {% if call.call_status == 'follow_up' %}🔁 Follow Up
+                {% elif call.call_status == 'converted' %}💰 Converted
+                {% elif call.call_status == 'already_enrolled' %}📋 Already Enrolled
+                {% elif call.call_status == 'need_more_detail' %}ℹ️ Need More Detail
+                {% elif call.call_status == 'not_interested' %}❌ Not Interested
+                {% elif call.call_status == 'discarded' %}🗑 Discarded
+                {% else %}{{ call.call_status }}{% endif %}
+              </span>
+            {% endif %}
+            <span class="call-timestamp">{{ call.called_at | format_dt }}</span>
+          </div>
+
+          <div class="call-body">
+            {% if call.connected %}
+              {% if call.not_connected_reason %}
+              {% else %}
+                {% if call.disposition %}
+                  <div class="call-detail"><strong>Disposition:</strong> {{ call.disposition }}</div>
+                {% endif %}
+                {% if call.comments %}
+                  <div class="call-detail"><strong>Comments:</strong> {{ call.comments }}</div>
+                {% endif %}
+                {% if call.call_status == 'follow_up' and call.follow_up_date %}
+                  <div class="call-detail" style="color:var(--warning);">
+                    <strong>Follow-up:</strong> {{ call.follow_up_date }}
+                    {% if call.follow_up_time %}at {{ call.follow_up_time }}{% endif %}
+                  </div>
+                {% endif %}
+
+                {% if call.call_status == 'converted' %}
+                <div class="conversion-box">
+                  <div class="conversion-box-title">💰 Conversion Details</div>
+                  {% if call.bootcamp_price %}
+                  <div class="conversion-row">
+                    <span class="label">Bootcamp Price</span>
+                    <span class="value">{{ call.bootcamp_price | inr }}</span>
+                  </div>
+                  {% endif %}
+                  {% if call.discount_amount %}
+                  <div class="conversion-row">
+                    <span class="label">Discount</span>
+                    <span class="value" style="color:var(--warning);">- {{ call.discount_amount | inr }}</span>
+                  </div>
+                  {% endif %}
+                  {% if call.token_amount %}
+                  <div class="conversion-row">
+                    <span class="label">Token Paid</span>
+                    <span class="value">{{ call.token_amount | inr }}</span>
+                  </div>
+                  {% endif %}
+                  {% if call.amount_paid %}
+                  <div class="conversion-row" style="border-top:1px solid rgba(255,255,255,0.08);padding-top:6px;margin-top:4px;">
+                    <span class="label" style="font-weight:700;">Total Paid</span>
+                    <span class="value" style="color:var(--success);font-size:1rem;font-weight:800;">{{ call.amount_paid | inr }}</span>
+                  </div>
+                  {% endif %}
+                  {% if call.payment_mode %}
+                  <div class="conversion-row">
+                    <span class="label">Payment Mode</span>
+                    <span class="value">{{ call.payment_mode | upper }}</span>
+                  </div>
+                  {% endif %}
+                  {% if call.payment_reference %}
+                  <div class="conversion-row">
+                    <span class="label">Reference</span>
+                    <span class="value">{{ call.payment_reference }}</span>
+                  </div>
+                  {% endif %}
+                </div>
+                {% endif %}
+              {% endif %}
+            {% else %}
+              <div class="call-detail">
+                <strong>Reason:</strong>
+                {% if call.not_connected_reason == 'not_connected' %}Not Connected
+                {% elif call.not_connected_reason == 'internet_issue' %}Internet Issue
+                {% elif call.not_connected_reason == 'call_failure' %}Call Failure
+                {% elif call.not_connected_reason == 'switched_off' %}Switched Off
+                {% elif call.not_connected_reason == 'busy' %}Busy
+                {% elif call.not_connected_reason == 'ringing_no_answer' %}Ringing, No Answer
+                {% else %}{{ call.not_connected_reason or '—' }}{% endif %}
+              </div>
+            {% endif %}
+
+            {% if call.agent_name %}
+            <div class="call-detail mt-1 text-sm text-muted">
+              By: <span class="agent-tag">🎧 {{ call.agent_name }}</span>
+              &nbsp;·&nbsp; Updated: {{ call.updated_at | format_dt }}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding:40px 20px;">
+      <span class="empty-icon">📞</span>
+      <h3>No calls logged yet</h3>
+      <p>Log the first call attempt for this lead</p>
+      <a href="{{ url_for('agent_call_log', lead_id=lead.id) }}" class="btn btn-primary mt-3">📞 Log First Call</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+@media (max-width: 900px) {
+  .detail-grid { grid-template-columns: 1fr !important; }
+}
+</style>
+{% endblock %}

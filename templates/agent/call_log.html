@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+{% block title %}Log Call — {{ lead.lead_name or lead.contact_no }}{% endblock %}
+{% block page_title %}Log Call{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="{{ url_for('agent_dashboard') }}">Campaigns</a>
+  <span class="sep">›</span>
+  <a href="{{ url_for('agent_campaign', campaign_type=lead.campaign_type) }}">{{ campaign_label }}</a>
+  <span class="sep">›</span>
+  <a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}">{{ lead.lead_name or lead.contact_no }}</a>
+  <span class="sep">›</span>
+  <span class="current">Log Call #{{ next_attempt }}</span>
+</div>
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>Log Call — Attempt #{{ next_attempt }}</h1>
+    <p>Recording call for <strong>{{ lead.lead_name or lead.contact_no }}</strong> · {{ lead.bootcamp_title }}</p>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 360px;gap:24px;align-items:start;" class="call-log-grid">
+
+  <!-- Main Form -->
+  <div class="card">
+    <form method="POST" action="{{ url_for('agent_call_log', lead_id=lead.id) }}" id="callForm">
+
+      <!-- Date & Time -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">📅 Call Date & Time</label>
+          <input type="datetime-local" name="called_at" id="called_at" class="form-control"
+                 value="{{ now_str }}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Attempt Number</label>
+          <input type="text" class="form-control" value="#{{ next_attempt }}" disabled
+                 style="opacity:0.6;font-weight:700;font-size:1rem;">
+        </div>
+      </div>
+
+      <!-- Connection Status Toggle -->
+      <div class="form-group">
+        <label class="form-label">📞 Connection Status</label>
+        <div class="toggle-group" id="connectionToggle">
+          <input type="radio" name="connected" id="conn_yes" value="true" checked>
+          <label for="conn_yes">✅ Connected</label>
+          <input type="radio" name="connected" id="conn_no" value="false">
+          <label for="conn_no">❌ Not Connected</label>
+        </div>
+      </div>
+
+      <!-- NOT CONNECTED section -->
+      <div id="notConnectedSection" class="hidden">
+        <div style="background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.15);border-radius:var(--radius);padding:20px;margin-bottom:20px;">
+          <div style="color:var(--danger);font-weight:700;font-size:0.85rem;margin-bottom:14px;">❌ Not Connected — Reason</div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label">Reason for No Connection</label>
+            <select name="not_connected_reason" id="not_connected_reason" class="form-control">
+              <option value="not_connected">📵 Not Connected</option>
+              <option value="switched_off">🔕 Phone Switched Off</option>
+              <option value="ringing_no_answer">🔔 Ringing, No Answer</option>
+              <option value="busy">📞 Line Busy</option>
+              <option value="internet_issue">🌐 Internet Issue</option>
+              <option value="call_failure">⚠️ Call Failure / Network Error</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONNECTED section -->
+      <div id="connectedSection">
+        <div style="background:rgba(16,185,129,0.04);border:1px solid rgba(16,185,129,0.12);border-radius:var(--radius);padding:20px;margin-bottom:20px;">
+          <div style="color:var(--success);font-weight:700;font-size:0.85rem;margin-bottom:14px;">✅ Connected — Call Details</div>
+
+          <!-- Call Status -->
+          <div class="form-group">
+            <label class="form-label">Call Outcome / Status</label>
+            <select name="call_status" id="call_status" class="form-control">
+              <option value="">— Select Outcome —</option>
+              <option value="follow_up">🔁 Follow Up</option>
+              <option value="converted">💰 Converted (Paid on Call)</option>
+              <option value="already_enrolled">📋 Already Enrolled</option>
+              <option value="need_more_detail">ℹ️ Need More Detail</option>
+              <option value="not_interested">❌ Not Interested</option>
+              <option value="discarded">🗑 Discarded</option>
+            </select>
+          </div>
+
+          <!-- Disposition -->
+          <div class="form-group">
+            <label class="form-label">Disposition</label>
+            <input type="text" name="disposition" id="disposition" class="form-control"
+                   placeholder="e.g. Already enrolled earlier for same Bx">
+          </div>
+
+          <!-- Comments -->
+          <div class="form-group">
+            <label class="form-label">Comments</label>
+            <textarea name="comments" id="comments" class="form-control" rows="3"
+                      placeholder="Additional notes about this call..."></textarea>
+          </div>
+
+          <!-- FOLLOW UP section -->
+          <div id="followUpSection" class="hidden">
+            <hr class="divider">
+            <div style="color:var(--warning);font-weight:700;font-size:0.82rem;margin-bottom:12px;">🔁 Schedule Follow-Up</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Follow-Up Date</label>
+                <input type="date" name="follow_up_date" id="follow_up_date" class="form-control">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Follow-Up Time</label>
+                <input type="time" name="follow_up_time" id="follow_up_time" class="form-control">
+              </div>
+            </div>
+          </div>
+
+          <!-- CONVERTED section -->
+          <div id="convertedSection" class="hidden">
+            <hr class="divider">
+            <div style="color:var(--success);font-weight:700;font-size:0.82rem;margin-bottom:12px;">💰 Conversion Details</div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Bootcamp Price (₹)</label>
+                <input type="number" name="bootcamp_price" id="bootcamp_price" class="form-control"
+                       placeholder="0" min="0" step="0.01"
+                       {% if lead.amount %}value="{{ lead.amount }}"{% endif %}>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Discount Given (₹)</label>
+                <input type="number" name="discount_amount" id="discount_amount" class="form-control"
+                       placeholder="0" min="0" step="0.01">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Token Amount (₹)</label>
+                <input type="number" name="token_amount" id="token_amount" class="form-control"
+                       placeholder="0" min="0" step="0.01">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Total Amount Paid (₹)</label>
+                <input type="number" name="amount_paid" id="amount_paid" class="form-control"
+                       placeholder="0" min="0" step="0.01"
+                       style="border-color:rgba(16,185,129,0.4);">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Payment Mode</label>
+                <select name="payment_mode" id="payment_mode" class="form-control">
+                  <option value="">— Select —</option>
+                  <option value="upi">📱 UPI</option>
+                  <option value="card">💳 Card</option>
+                  <option value="cash">💵 Cash</option>
+                  <option value="bank_transfer">🏦 Bank Transfer</option>
+                  <option value="emi">📅 EMI</option>
+                  <option value="cheque">🗒 Cheque</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Payment Reference / TXN ID</label>
+                <input type="text" name="payment_reference" id="payment_reference" class="form-control"
+                       placeholder="UPI/TXN reference number">
+              </div>
+            </div>
+
+            <!-- Live Amount Summary -->
+            <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:var(--radius-sm);padding:16px;margin-top:4px;">
+              <div style="font-size:0.78rem;font-weight:700;color:var(--success);margin-bottom:10px;letter-spacing:0.06em;">AMOUNT SUMMARY</div>
+
+              <div style="display:flex;justify-content:space-between;font-size:0.83rem;margin-bottom:5px;">
+                <span style="color:var(--text-muted);">Bootcamp Price</span>
+                <span id="sumPrice" style="font-weight:600;">₹0</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:0.83rem;margin-bottom:5px;">
+                <span style="color:var(--text-muted);">Discount</span>
+                <span id="sumDiscount" style="color:var(--warning);font-weight:600;">₹0</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:0.83rem;margin-bottom:5px;">
+                <span style="color:var(--text-muted);">Token / Partial</span>
+                <span id="sumToken" style="font-weight:600;">₹0</span>
+              </div>
+
+              <!-- Balance due row — hidden when no token -->
+              <div class="sum-balance-row" style="display:none;justify-content:space-between;font-size:0.83rem;margin-bottom:5px;background:rgba(251,191,36,0.08);padding:4px 6px;border-radius:4px;">
+                <span style="color:var(--warning);">⚠️ Balance Due</span>
+                <span id="sumBalance" style="color:var(--warning);font-weight:700;">₹0</span>
+              </div>
+
+              <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;margin-top:8px;display:flex;justify-content:space-between;font-weight:700;align-items:center;">
+                <span>Total Paid</span>
+                <span id="sumTotal" style="color:var(--success);font-size:1.1rem;">₹0</span>
+              </div>
+              <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;text-align:center;opacity:0.7;">
+                ⚡ Total Amount Paid auto-updates from above fields
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Transfer Lead Optional Dropdown -->
+      {% if session.get('role') == 'admin' %}
+      <div class="form-group" style="margin-top: 24px; border-top: 1px dashed var(--border-strong); padding-top: 20px;">
+        <label class="form-label" for="transfer_agent">🔁 Transfer Lead to <span style="opacity:0.5;font-weight:400;">(Optional)</span></label>
+        <select name="transfer_agent" id="transfer_agent" class="form-control">
+          <option value="">— Keep Current Agent (No Transfer) —</option>
+          {% for other_agent in other_agents %}
+            <option value="{{ other_agent.name }}">🎧 {{ other_agent.name }}</option>
+          {% endfor %}
+        </select>
+        <div class="form-hint">Selecting another agent will immediately transfer this lead to them upon saving this call log.</div>
+      </div>
+      {% endif %}
+
+      <!-- Submit -->
+      <div style="display:flex;gap:12px;margin-top:8px;">
+        <button type="submit" class="btn btn-primary btn-lg" style="flex:1;" id="submitBtn">
+          💾 Save Call Log
+        </button>
+        <a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}" class="btn btn-secondary btn-lg">
+          Cancel
+        </a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Right: Lead Snapshot -->
+  <div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">👤 Lead Info</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="lead-info-item">
+          <div class="lead-info-label">Name</div>
+          <div class="lead-info-value">{{ lead.lead_name or '—' }}</div>
+        </div>
+        <div class="lead-info-item">
+          <div class="lead-info-label">Phone</div>
+          <div class="lead-info-value phone-num" style="font-size:1rem;font-weight:700;">{{ lead.contact_no }}</div>
+        </div>
+        <div class="lead-info-item">
+          <div class="lead-info-label">Bootcamp</div>
+          <div class="lead-info-value" style="font-size:0.85rem;">{{ lead.bootcamp_title or '—' }}</div>
+        </div>
+        <div class="lead-info-item">
+          <div class="lead-info-label">Date</div>
+          <div class="lead-info-value">{{ lead.bootcamp_date or '—' }}</div>
+        </div>
+        {% if lead.amount %}
+        <div class="lead-info-item">
+          <div class="lead-info-label">Amount</div>
+          <div class="lead-info-value" style="color:var(--success);font-weight:700;">{{ lead.amount | inr }}</div>
+        </div>
+        {% endif %}
+        <div class="lead-info-item">
+          <div class="lead-info-label">Current Status</div>
+          <div class="lead-info-value">
+            <span class="badge {{ lead.final_status | status_class }}">{{ lead.final_status }}</span>
+          </div>
+        </div>
+        <div class="lead-info-item">
+          <div class="lead-info-label">Total Attempts</div>
+          <div class="lead-info-value" style="font-size:1.4rem;font-weight:800;color:var(--text-accent);">
+            {{ lead.total_attempts or 0 }}
+            <span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;">before this</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% if lead.calling_for_upsell %}
+    <div class="card" style="margin-top:16px;">
+      <div class="card-header">
+        <span class="card-title">📝 Calling For</span>
+      </div>
+      <div style="font-size:0.83rem;color:var(--text-secondary);line-height:1.6;">
+        {{ lead.calling_for_upsell }}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<style>
+@media (max-width: 900px) {
+  .call-log-grid { grid-template-columns: 1fr !important; }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/call_form.js') }}"></script>
+<script>
+// Set current datetime as default
+const now = new Date();
+const pad = n => String(n).padStart(2, '0');
+const localDT = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+document.getElementById('called_at').value = localDT;
+</script>
+{% endblock %}

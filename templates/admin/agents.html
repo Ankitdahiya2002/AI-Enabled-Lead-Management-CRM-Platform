@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}Manage Agents{% endblock %}
+{% block page_title %}Manage Agents{% endblock %}
+
+{% block top_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openModal('addAgentModal')">+ Add Agent</button>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>Agents</h1>
+    <p>{{ agents | length }} agent{{ 's' if agents | length != 1 }} registered</p>
+  </div>
+</div>
+
+<!-- How Agents Login info banner -->
+<div style="background:rgba(139,92,246,0.07);border:1px solid rgba(139,92,246,0.2);
+            border-radius:var(--radius);padding:16px 20px;margin-bottom:20px;
+            display:flex;gap:16px;align-items:flex-start;">
+  <span style="font-size:1.5rem;">🔑</span>
+  <div>
+    <div style="font-weight:700;font-size:0.9rem;margin-bottom:6px;color:var(--text-accent);">How Agents Login</div>
+    <div style="font-size:0.83rem;color:var(--text-secondary);line-height:1.7;">
+      Agents log in at the same URL: <code style="background:rgba(255,255,255,0.08);padding:2px 6px;border-radius:4px;">http://localhost:5000</code><br>
+      Use the <strong>Email</strong> and <strong>Password</strong> you set when creating their account.<br>
+      Agents are automatically redirected to their own dashboard — they <strong>cannot</strong> see admin pages.
+    </div>
+  </div>
+</div>
+
+<div class="table-wrapper">
+  {% if agents %}
+  <div class="table-header">
+    <span class="table-title">All Agents</span>
+    <button class="btn btn-primary btn-sm" onclick="openModal('addAgentModal')">+ Add Agent</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Agent</th>
+        <th>Email / Login</th>
+        <th>Role</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for agent in agents %}
+      <tr>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="user-avatar" style="width:36px;height:36px;font-size:0.85rem;flex-shrink:0;">
+              {{ agent.name[0].upper() if agent.name else '?' }}
+            </div>
+            <div>
+              <div style="font-weight:600;">{{ agent.name }}</div>
+              <div style="font-size:0.72rem;color:var(--text-muted);">ID: {{ agent.id[:8] }}…</div>
+            </div>
+          </div>
+        </td>
+        <td>
+          <div style="font-family:monospace;font-size:0.85rem;color:var(--text-primary);">{{ agent.email }}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">Use this to log in at /login</div>
+        </td>
+        <td>
+          <span class="badge {% if agent.role == 'admin' %}badge-green{% else %}badge-purple{% endif %}">
+            {{ '👑 Admin' if agent.role == 'admin' else '🎧 Agent' }}
+          </span>
+        </td>
+        <td>
+          <span class="badge {% if agent.is_active %}badge-success{% else %}badge-danger{% endif %}">
+            {{ '✅ Active' if agent.is_active else '🚫 Inactive' }}
+          </span>
+        </td>
+        <td class="muted">{{ agent.created_at | format_dt }}</td>
+        <td>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm"
+                    onclick="showResetModal('{{ agent.id }}', '{{ agent.name }}', '{{ agent.email }}')"
+                    title="Reset password">
+              🔑 Reset
+            </button>
+            {% if agent.is_active %}
+            <form method="POST" action="{{ url_for('admin_toggle_agent', agent_id=agent.id) }}"
+                  onsubmit="return confirm('Deactivate {{ agent.name }}? They will not be able to log in.')">
+              <input type="hidden" name="action" value="deactivate">
+              <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--danger);">🚫 Deactivate</button>
+            </form>
+            {% else %}
+            <form method="POST" action="{{ url_for('admin_toggle_agent', agent_id=agent.id) }}">
+              <input type="hidden" name="action" value="activate">
+              <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--success);">✅ Activate</button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">
+    <span class="empty-icon">🎧</span>
+    <h3>No agents yet</h3>
+    <p>Add your first agent to get started. They'll be able to log in at the same URL.</p>
+    <button class="btn btn-primary mt-3" onclick="openModal('addAgentModal')">+ Add Agent</button>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── Add Agent Modal ──────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="addAgentModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">🎧 Add New Agent</span>
+      <span class="modal-close" onclick="closeModal('addAgentModal')">✕</span>
+    </div>
+    <form method="POST" action="{{ url_for('admin_create_agent') }}">
+      <div class="form-group">
+        <label class="form-label">Full Name</label>
+        <input type="text" name="name" class="form-control" placeholder="e.g. Priya Sharma" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" name="email" class="form-control" placeholder="agent@tfu.com" required>
+        <div class="form-hint">This will be their login username</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Temporary Password</label>
+        <div style="position:relative;">
+          <input type="password" name="password" id="agentPwd" class="form-control"
+                 placeholder="Min 8 characters" required minlength="8"
+                 style="padding-right:42px;">
+          <button type="button" onclick="togglePwd()"
+                  style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+                         background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1rem;">
+            👁
+          </button>
+        </div>
+        <div class="form-hint">Share this with the agent — they can change it after logging in</div>
+      </div>
+      <div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);
+                  border-radius:var(--radius-sm);padding:12px;margin-bottom:16px;font-size:0.8rem;
+                  color:var(--text-secondary);line-height:1.6;">
+        ℹ️ The agent will log in at <strong>http://localhost:5000/login</strong> using the email and password above.
+        They will only see their assigned campaign leads — not admin data.
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px;">
+        <button type="submit" class="btn btn-primary" style="flex:1;">✅ Create Agent</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal('addAgentModal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Reset Password Modal ─────────────────────────────────────────────── -->
+<div class="modal-overlay" id="resetPwdModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">🔑 Reset Password</span>
+      <span class="modal-close" onclick="closeModal('resetPwdModal')">✕</span>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div style="font-weight:600;" id="resetAgentName"></div>
+      <div style="font-size:0.82rem;color:var(--text-muted);" id="resetAgentEmail"></div>
+    </div>
+    <form method="POST" action="{{ url_for('admin_reset_agent_password') }}">
+      <input type="hidden" name="agent_id" id="resetAgentId">
+      <div class="form-group">
+        <label class="form-label">New Password</label>
+        <input type="password" name="new_password" class="form-control"
+               placeholder="Min 8 characters" required minlength="8">
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px;">
+        <button type="submit" class="btn btn-primary" style="flex:1;">🔑 Reset Password</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal('resetPwdModal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', function(e) {
+    if (e.target === this) closeModal(this.id);
+  });
+});
+
+function showResetModal(id, name, email) {
+  document.getElementById('resetAgentId').value   = id;
+  document.getElementById('resetAgentName').textContent  = name;
+  document.getElementById('resetAgentEmail').textContent = email;
+  openModal('resetPwdModal');
+}
+
+function togglePwd() {
+  const f = document.getElementById('agentPwd');
+  f.type = f.type === 'password' ? 'text' : 'password';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard{% endblock %}
+{% block page_title %}Admin Dashboard{% endblock %}
+
+{% block top_actions %}
+  <a href="{{ url_for('admin_export_report') }}" class="btn btn-secondary btn-sm" style="margin-right: 8px;">📊 Download Detailed Report</a>
+  <a href="{{ url_for('admin_upload') }}" class="btn btn-primary btn-sm">📤 Upload Leads</a>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>Overview</h1>
+    <p>Welcome back, {{ user.name }} — here's what's happening today</p>
+  </div>
+</div>
+
+<!-- Stats Grid -->
+<div class="stats-grid" style="margin-bottom:0;">
+
+  <!-- Total Leads — links to leads list -->
+  <a href="{{ url_for('admin_leads') }}" class="stat-card purple" style="text-decoration:none;color:inherit;display:block;">
+    <div class="stat-icon purple">👥</div>
+    <div class="stat-value">{{ stats.total_leads | default(0) }}</div>
+    <div class="stat-label">Total Leads</div>
+  </a>
+
+  <!-- Converted — toggles detail -->
+  <div class="stat-card green stat-clickable" onclick="togglePanel('convertedPanel')" style="cursor:pointer;" id="cardConverted">
+    <div class="stat-icon green">✅</div>
+    <div class="stat-value">{{ stats.converted | default(0) }}</div>
+    <div class="stat-label">Converted <span style="font-size:0.65rem;opacity:0.6;">▼</span></div>
+  </div>
+
+  <!-- Follow Ups — toggles detail -->
+  <div class="stat-card orange stat-clickable" onclick="togglePanel('followUpPanel')" style="cursor:pointer;" id="cardFollowUp">
+    <div class="stat-icon orange">🔁</div>
+    <div class="stat-value">{{ stats.follow_up | default(0) }}</div>
+    <div class="stat-label">Follow Ups <span style="font-size:0.65rem;opacity:0.6;">▼</span></div>
+  </div>
+
+  <!-- Calls Today — toggles detail -->
+  <div class="stat-card blue stat-clickable" onclick="togglePanel('callsTodayPanel')" style="cursor:pointer;" id="cardCallsToday">
+    <div class="stat-icon blue">📞</div>
+    <div class="stat-value">{{ stats.today_calls | default(0) }}</div>
+    <div class="stat-label">Calls Today <span style="font-size:0.65rem;opacity:0.6;">▼</span></div>
+  </div>
+</div>
+
+<!-- ── Drilldown panels (hidden by default) ─────────────────────────────── -->
+
+<!-- Converted Leads Panel -->
+<div id="convertedPanel" class="drilldown-panel" style="display:none;">
+  <div class="drilldown-header">
+    <span>✅ Converted Leads</span>
+    <a href="{{ url_for('admin_leads', status='Converted') }}" class="btn btn-ghost btn-sm">View All →</a>
+  </div>
+  {% if detail.converted_leads %}
+  <table>
+    <thead><tr>
+      <th>Lead Name / Bootcamp</th><th>Phone</th><th>Campaign</th><th>Priority</th><th>Agent</th><th>Converted On</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for lead in detail.converted_leads %}
+    <tr>
+      <td>
+        <div style="font-weight:600;">{{ lead.lead_name or '—' }}</div>
+        {% if lead.bootcamp_title %}<div style="font-size:0.73rem;color:var(--text-muted);">📚 {{ lead.bootcamp_title }}</div>{% endif %}
+      </td>
+      <td class="phone-num">{{ lead.contact_no }}</td>
+      <td><span class="badge badge-purple">{{ lead.campaign_type | campaign_label }}</span></td>
+      <td>{{ lead.priority or '—' }}</td>
+      <td>{{ lead.agent_name or '—' }}</td>
+      <td class="muted">{{ lead.updated_at | format_dt }}</td>
+      <td><a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}" class="btn btn-ghost btn-sm">View →</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state" style="padding:24px;"><span class="empty-icon">📭</span><p>No converted leads yet</p></div>
+  {% endif %}
+</div>
+
+<!-- Follow Up Leads Panel -->
+<div id="followUpPanel" class="drilldown-panel" style="display:none;">
+  <div class="drilldown-header">
+    <span>🔁 Follow-Up Leads</span>
+    <a href="{{ url_for('admin_leads', status='Follow Up') }}" class="btn btn-ghost btn-sm">View All →</a>
+  </div>
+  {% if detail.follow_up_leads %}
+  <table>
+    <thead><tr>
+      <th>Lead Name / Bootcamp</th><th>Phone</th><th>Campaign</th><th>Priority</th><th>Agent</th><th>Last Called</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for lead in detail.follow_up_leads %}
+    <tr>
+      <td>
+        <div style="font-weight:600;">{{ lead.lead_name or '—' }}</div>
+        {% if lead.bootcamp_title %}<div style="font-size:0.73rem;color:var(--text-muted);">📚 {{ lead.bootcamp_title }}</div>{% endif %}
+      </td>
+      <td class="phone-num">{{ lead.contact_no }}</td>
+      <td><span class="badge badge-purple">{{ lead.campaign_type | campaign_label }}</span></td>
+      <td>{{ lead.priority or '—' }}</td>
+      <td>{{ lead.agent_name or '—' }}</td>
+      <td>
+        {% if lead.last_call_date %}
+          <span style="color:var(--warning);font-weight:600;">{{ lead.last_call_date | format_dt }}</span>
+        {% else %}—{% endif %}
+      </td>
+      <td><a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}" class="btn btn-ghost btn-sm">View →</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state" style="padding:24px;"><span class="empty-icon">📭</span><p>No follow-up leads today</p></div>
+  {% endif %}
+</div>
+
+<!-- Calls Today Panel -->
+<div id="callsTodayPanel" class="drilldown-panel" style="display:none;">
+  <div class="drilldown-header">
+    <span>📞 Calls Made Today</span>
+  </div>
+  {% if detail.today_call_logs %}
+  <table>
+    <thead><tr>
+      <th>Lead Name</th><th>Phone</th><th>Bootcamp</th><th>Call Status</th><th>Called At</th>
+    </tr></thead>
+    <tbody>
+    {% for call in detail.today_call_logs %}
+    {% set lead = call.leads or {} %}
+    <tr>
+      <td style="font-weight:600;">{{ lead.lead_name or '—' }}</td>
+      <td class="phone-num">{{ lead.contact_no or '—' }}</td>
+      <td style="font-size:0.8rem;color:var(--text-muted);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ lead.bootcamp_title or '—' }}</td>
+      <td>
+        {% set cs = call.call_status or '' %}
+        {% if cs == 'converted' %}<span class="badge badge-green">💰 Converted</span>
+        {% elif cs == 'follow_up' %}<span class="badge badge-orange">🔁 Follow Up</span>
+        {% elif cs == 'not_connected' %}<span class="badge">📵 Not Connected</span>
+        {% else %}<span class="badge">{{ cs or '—' }}</span>{% endif %}
+      </td>
+      <td class="muted">{{ call.called_at | format_dt }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state" style="padding:24px;"><span class="empty-icon">📭</span><p>No calls logged today</p></div>
+  {% endif %}
+</div>
+
+<!-- Campaign Breakdown -->
+<div class="card mb-6" style="margin-top:20px;">
+  <div class="card-header">
+    <span class="card-title">📋 Campaign Breakdown</span>
+    <a href="{{ url_for('admin_leads') }}" class="btn btn-ghost btn-sm">View All →</a>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;">
+    {% set camp_data = [
+      ('atpitch_sia',    '📈', 'Atpitch SIA',    'purple'),
+      ('atpitch_sta',    '📊', 'Atpitch STA',    'blue'),
+      ('atpitch_others', '🎯', 'Atpitch Others', 'teal'),
+      ('upsell',         '⬆️', 'Upsell OB',      'orange'),
+      ('fp_l1',          '💳', 'FP OB L1/High',  'green'),
+      ('fp_l2',          '🔄', 'FP OB L2/Low',   'red'),
+    ] %}
+    {% for ctype, icon, label, color in camp_data %}
+    <a href="{{ url_for('admin_leads', campaign_type=ctype) }}"
+       style="display:block;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-decoration:none;color:inherit;transition:all var(--t-normal);"
+       onmouseover="this.style.borderColor='var(--accent-1)'"
+       onmouseout="this.style.borderColor='var(--border)'">
+      <div style="font-size:1.4rem;margin-bottom:6px;">{{ icon }}</div>
+      <div style="font-weight:600;font-size:0.85rem;margin-bottom:4px;">{{ label }}</div>
+      <div style="font-size:1.4rem;font-weight:800;color:var(--text-accent);">
+        {{ stats.campaign_stats.get(ctype, 0) }}
+      </div>
+      <div style="font-size:0.72rem;color:var(--text-muted);">leads</div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Recent Uploads -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">📁 Recent Uploads</span>
+    <a href="{{ url_for('admin_upload') }}" class="btn btn-primary btn-sm">+ New Upload</a>
+  </div>
+  {% if recent_uploads %}
+  <div class="table-wrapper" style="border:none;border-radius:0;">
+    <table>
+      <thead>
+        <tr>
+          <th>File</th>
+          <th>Campaign</th>
+          <th>Total</th>
+          <th>Inserted</th>
+          <th>Duplicates</th>
+          <th>Errors</th>
+          <th>Uploaded At</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ul in recent_uploads %}
+        <tr>
+          <td>{{ ul.filename or '—' }}</td>
+          <td><span class="badge badge-purple">{{ ul.campaign_type | campaign_label }}</span></td>
+          <td>{{ ul.total_rows }}</td>
+          <td style="color:var(--success);">{{ ul.inserted_rows }}</td>
+          <td style="color:var(--warning);">{{ ul.duplicate_rows }}</td>
+          <td style="color:var(--danger);">{{ ul.error_rows }}</td>
+          <td class="muted">{{ ul.created_at | format_dt }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <span class="empty-icon">📂</span>
+    <h3>No uploads yet</h3>
+    <p>Upload your first CSV file to get started</p>
+    <a href="{{ url_for('admin_upload') }}" class="btn btn-primary mt-3">Upload Leads</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePanel(id) {
+  const panels = ['convertedPanel', 'followUpPanel', 'callsTodayPanel'];
+  panels.forEach(pid => {
+    const el = document.getElementById(pid);
+    if (pid === id) {
+      const isOpen = el.style.display !== 'none';
+      el.style.display = isOpen ? 'none' : 'block';
+      // Animate open
+      if (!isOpen) {
+        el.style.animation = 'slideDown 0.2s ease forwards';
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    } else {
+      el.style.display = 'none';
+    }
+  });
+}
+</script>
+<style>
+.drilldown-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--accent-1);
+  border-radius: 0 0 var(--radius) var(--radius);
+  margin-top: -2px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+.drilldown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  background: rgba(139,92,246,0.06);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-accent);
+}
+.drilldown-panel table { margin: 0; border-radius: 0; }
+.stat-clickable { transition: transform 0.15s, box-shadow 0.15s; }
+.stat-clickable:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+</style>
+{% endblock %}

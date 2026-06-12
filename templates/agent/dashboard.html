@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Campaigns{% endblock %}
+{% block page_title %}My Campaigns{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>Campaigns</h1>
+    <p>Select a campaign to view and manage your leads</p>
+  </div>
+</div>
+
+<div class="campaigns-grid">
+  {% for camp in campaigns %}
+  <a href="{{ url_for('agent_campaign', campaign_type=camp.type) }}" class="campaign-card {{ camp.color }}">
+    <span class="campaign-icon">{{ camp.icon }}</span>
+    <div class="campaign-name">{{ camp.label }}</div>
+    <div class="campaign-meta">
+      {% if camp.follow_up > 0 %}
+        <span style="color:var(--warning);">⚠️ {{ camp.follow_up }} follow-up{{ 's' if camp.follow_up != 1 }}</span>
+      {% else %}
+        Click to view leads
+      {% endif %}
+    </div>
+
+    <div class="campaign-stats-row">
+      <div class="campaign-stat">
+        <div class="campaign-stat-val">{{ camp.total }}</div>
+        <div class="campaign-stat-label">Total</div>
+      </div>
+      <div class="campaign-stat">
+        <div class="campaign-stat-val" style="color:var(--warning);">{{ camp.pending }}</div>
+        <div class="campaign-stat-label">Pending</div>
+      </div>
+      <div class="campaign-stat">
+        <div class="campaign-stat-val" style="color:var(--success);">
+          {{ [0, camp.total - camp.pending - camp.follow_up] | max }}
+        </div>
+        <div class="campaign-stat-label">Actioned</div>
+      </div>
+    </div>
+
+    {% if camp.follow_up > 0 %}
+    <div style="margin-top:12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius-sm);padding:8px 12px;font-size:0.78rem;color:var(--warning);">
+      🔔 {{ camp.follow_up }} lead{{ 's' if camp.follow_up != 1 }} need follow-up
+    </div>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+{% if not campaigns or campaigns | sum(attribute='total') == 0 %}
+<div class="empty-state" style="margin-top:48px;">
+  <span class="empty-icon">📭</span>
+  <h3>No leads assigned yet</h3>
+  <p>Your admin will assign leads to you once files are uploaded</p>
+</div>
+{% endif %}
+{% endblock %}
