@@ -233,12 +233,21 @@ def parse_atpitch(
             phone = clean_phone(get_flexible(row, 'contact_no', 'phone', 'mobile', 'contact'))
             name = get_flexible(row, 'name', 'customer_name', 'lead_name')
             
+            selected_campaign = extra.get('campaign_type') if extra else None
+            default_bootcamp_name = 'Unknown Bootcamp'
+            if selected_campaign == 'atpitch_sia':
+                default_bootcamp_name = 'Super Investing Arena'
+            elif selected_campaign == 'atpitch_sta':
+                default_bootcamp_name = 'Stock Trading Arena'
+            elif selected_campaign == 'atpitch_others':
+                default_bootcamp_name = 'Atpitch Others'
+
             detected_bootcamp = detect_bootcamp_from_row(row)
             bootcamp_title = (
-                admin_bootcamp
+                get_flexible(row, 'bootcamptitle', 'bootcamp_title', 'bootcamp')
+                or admin_bootcamp
                 or detected_bootcamp
-                or name
-                or 'Unknown Bootcamp'
+                or default_bootcamp_name
             )
 
             if not phone:
@@ -246,7 +255,11 @@ def parse_atpitch(
                 continue
 
             unique_key = make_unique_key(phone, bootcamp_title)
-            campaign_type = detect_lead_type_atpitch(bootcamp_title)
+            
+            if selected_campaign and selected_campaign in ['atpitch_sia', 'atpitch_sta', 'atpitch_others']:
+                campaign_type = selected_campaign
+            else:
+                campaign_type = detect_lead_type_atpitch(bootcamp_title)
 
             bootcamp_date_str = get_flexible(row, 'calling_date', 'date', 'dummy_date_time', 'created_on')
             bootcamp_date = parse_date(bootcamp_date_str) or admin_date or bootcamp_date_str or None
@@ -263,7 +276,7 @@ def parse_atpitch(
                 "bootcamp_date": bootcamp_date,
                 "fp_time": bootcamp_time,
                 "agent_name": get_flexible(row, 'agent', 'agent_name', 'owner_user_name', 'owner'),
-                "priority": admin_priority or get_flexible(row, 'priority') or None,
+                "priority": (admin_priority or get_flexible(row, 'priority') or "").strip().upper() or None,
                 "calling_for_upsell": get_flexible(row, 'calling_for_upsell'),
                 "joining_duration": get_flexible(row, 'joining_duration'),
                 "final_status": get_flexible(row, 'status') or "Pending",
@@ -309,11 +322,10 @@ def parse_upsell(
             
             detected_bootcamp = detect_bootcamp_from_row(row)
             bootcamp_title = (
-                admin_bootcamp
-                or get_flexible(row, 'bx')
+                get_flexible(row, 'bootcamptitle', 'bootcamp_title', 'bootcamp', 'bx')
+                or admin_bootcamp
                 or detected_bootcamp
-                or name
-                or 'Unknown Bootcamp'
+                or 'Upsell'
             )
 
             if not phone:
@@ -379,25 +391,26 @@ def parse_failed_pending(
             phone = clean_phone(get_flexible(row, 'phone', 'contact_no', 'phone_number', 'mobile'))
             name = get_flexible(row, 'name', 'customer_name', 'lead_name')
             
+            selected_campaign = extra.get('campaign_type') if extra else None
+            default_bootcamp_name = 'FP L2' if selected_campaign == 'fp_l2' else 'FP L1'
+
             detected_bootcamp = detect_bootcamp_from_row(row)
             bootcamp_title = (
-                admin_bootcamp
-                or get_flexible(
+                get_flexible(
                     row,
                     'bootcamptitle', 'bootcamp_title', 'bootcamp',
                     'asset_name', 'opportunity_event_name', 'masterclass_name',
                 )
                 or get_flexible(row, 'opportunity_name', 'opportunity_event')
+                or admin_bootcamp
                 or detected_bootcamp
-                or name
-                or 'Unknown Bootcamp'
+                or default_bootcamp_name
             )
 
             # Course level & FP tier
             course_level = get_flexible(row, 'courselevel', 'course_level', 'lead_type')
             opp_name     = get_flexible(row, 'opportunity_name')
-            selected_campaign = extra.get('campaign_type', 'fp_l1')
-            fp_level     = detect_fp_level(course_level, opp_name or name, default_level=selected_campaign)
+            fp_level = detect_fp_level(course_level, opp_name or name, default_level=selected_campaign or 'fp_l1')
 
             if not phone:
                 errors.append({'row': i, 'error': 'Missing phone', 'data': dict(row)})
@@ -524,24 +537,42 @@ def parse_leadsquared(
                 errors.append({"row": i, "error": "Missing phone and email", "data": dict(row)})
                 continue
 
-            # ── Opportunity / Bootcamp fields ─────────────────────────────
-            opp_name    = get_flexible(row, 'Opportunity Name')           # e.g. FP_JUN03_L1_HIGH
-            asset_name  = get_flexible(row, 'Asset Name', 'Opportunity Event Name', 'MasterClass Name')
-            
+            opp_name   = get_flexible(row, 'Opportunity Name', 'opportunity_name')
+            asset_name = get_flexible(row, 'Asset Name', 'Opportunity Event Name', 'MasterClass Name', 'asset_name')
+
+            selected_campaign = extra.get('campaign_type') if extra else None
+            default_bootcamp_name = 'LeadSquared'
+            if selected_campaign and selected_campaign != 'leadsquared':
+                if selected_campaign == 'atpitch_sia':
+                    default_bootcamp_name = 'Super Investing Arena'
+                elif selected_campaign == 'atpitch_sta':
+                    default_bootcamp_name = 'Stock Trading Arena'
+                elif selected_campaign == 'atpitch_others':
+                    default_bootcamp_name = 'Atpitch Others'
+                elif selected_campaign == 'upsell':
+                    default_bootcamp_name = 'Upsell'
+                elif selected_campaign == 'fp_l1':
+                    default_bootcamp_name = 'FP L1'
+                elif selected_campaign == 'fp_l2':
+                    default_bootcamp_name = 'FP L2'
+
             detected_bootcamp = detect_bootcamp_from_row(row)
             bootcamp_title = (
-                admin_bootcamp
+                get_flexible(row, 'bootcamptitle', 'bootcamp_title', 'bootcamp')
                 or asset_name
                 or opp_name
+                or admin_bootcamp
                 or detected_bootcamp
-                or name
-                or 'Unknown Bootcamp'
+                or default_bootcamp_name
             )
 
             # ── Campaign auto-detection ───────────────────────────────────
             course_level  = get_flexible(row, 'Course Level')
             category      = get_flexible(row, 'Category')
-            campaign_type = _detect_campaign_from_opportunity(opp_name, course_level, category)
+            if selected_campaign and selected_campaign != 'leadsquared':
+                campaign_type = selected_campaign
+            else:
+                campaign_type = _detect_campaign_from_opportunity(opp_name, course_level, category)
 
             # ── Amounts ──────────────────────────────────────────────────
             def to_float(val):
@@ -715,15 +746,34 @@ def parse_simple(
 
             # Priority: use admin-supplied value
             # Bootcamp: row value > admin override > header bootcamp
+            selected_campaign = extra.get('campaign_type') if extra else None
+            default_bootcamp_name = 'Unknown Bootcamp'
+            if selected_campaign:
+                if selected_campaign == 'atpitch_sia':
+                    default_bootcamp_name = 'Super Investing Arena'
+                elif selected_campaign == 'atpitch_sta':
+                    default_bootcamp_name = 'Stock Trading Arena'
+                elif selected_campaign == 'atpitch_others':
+                    default_bootcamp_name = 'Atpitch Others'
+                elif selected_campaign == 'upsell':
+                    default_bootcamp_name = 'Upsell'
+                elif selected_campaign == 'fp_l1':
+                    default_bootcamp_name = 'FP L1'
+                elif selected_campaign == 'fp_l2':
+                    default_bootcamp_name = 'FP L2'
+
             bootcamp_title = (
                 bootcamp_from_row
                 or admin_bootcamp
                 or header_bootcamp
-                or 'Unknown Bootcamp'
+                or default_bootcamp_name
             )
 
-            # ── Auto-detect campaign from bootcamp name ───────────────────
-            campaign_type = detect_lead_type_atpitch(bootcamp_title)
+            # ── Auto-detect or lock campaign ──────────────────────────────
+            if selected_campaign and selected_campaign != 'simple':
+                campaign_type = selected_campaign
+            else:
+                campaign_type = detect_lead_type_atpitch(bootcamp_title)
 
             unique_key = make_unique_key(phone, bootcamp_title)
             bootcamp_time = parse_time(admin_time) or None
@@ -779,9 +829,10 @@ def parse_file(
     parser = PARSERS.get(campaign_type)
     if not parser:
         raise ValueError(f"Unknown campaign type: {campaign_type}")
-    # All parsers accept extra kwarg; older ones ignore it
-    try:
+    
+    import inspect
+    sig = inspect.signature(parser)
+    if 'extra' in sig.parameters:
         return parser(file_content, uploaded_by=uploaded_by, batch_id=batch_id, extra=extra or {})
-    except TypeError:
-        # Older parser signature without extra
+    else:
         return parser(file_content, uploaded_by=uploaded_by, batch_id=batch_id)

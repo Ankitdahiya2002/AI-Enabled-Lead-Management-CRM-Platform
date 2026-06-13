@@ -62,7 +62,8 @@
         <th style="width: 40px; text-align: center; padding-left: 16px;">
           <input type="checkbox" id="selectAllLeads" style="cursor: pointer; transform: scale(1.15);">
         </th>
-        <th>Lead Name / Bootcamp</th>
+        <th>Lead Name</th>
+        <th>Bootcamp</th>
         <th>Phone</th>
         <th>Campaign</th>
         <th>Priority</th>
@@ -80,18 +81,18 @@
         <td style="text-align: center; padding-left: 16px;">
           <input type="checkbox" class="lead-checkbox" value="{{ lead.id }}" style="cursor: pointer; transform: scale(1.15);">
         </td>
-        <td style="min-width:180px;">
-          {% set display_name = lead.lead_name or '' %}
-          {% set bootcamp     = lead.bootcamp_title or '' %}
-          {% if display_name %}
-            <div style="font-weight:600;color:var(--text-primary);">{{ display_name }}</div>
-            {% if bootcamp %}
-              <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;
-                          max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"
-                   title="{{ bootcamp }}">📚 {{ bootcamp }}</div>
-            {% endif %}
-          {% elif bootcamp %}
-            <div style="font-weight:600;color:var(--text-primary);">{{ bootcamp }}</div>
+        <td style="min-width:140px;">
+          {% if lead.lead_name %}
+            <div style="font-weight:600;color:var(--text-primary);">{{ lead.lead_name }}</div>
+          {% else %}
+            <span style="color:var(--text-muted);">—</span>
+          {% endif %}
+        </td>
+        <td style="min-width:140px;">
+          {% if lead.bootcamp_title %}
+            <div style="font-size:0.82rem;font-weight:550;color:var(--text-secondary);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{{ lead.bootcamp_title }}">
+              📚 {{ lead.bootcamp_title }}
+            </div>
           {% else %}
             <span style="color:var(--text-muted);">—</span>
           {% endif %}
