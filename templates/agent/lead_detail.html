@@ -284,7 +284,7 @@
                 {% elif call.not_connected_reason == 'call_failure' %}Call Failure
                 {% elif call.not_connected_reason == 'switched_off' %}Switched Off
                 {% elif call.not_connected_reason == 'busy' %}Busy
-                {% elif call.not_connected_reason == 'ringing_no_answer' %}Ringing, No Answer
+                {% elif call.not_connected_reason == 'ringing_no_answer' %}DNP
                 {% else %}{{ call.not_connected_reason or '—' }}{% endif %}
               </div>
             {% endif %}
