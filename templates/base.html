@@ -8,6 +8,17 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
   {% block head %}{% endblock %}
+  <style>
+  .performance-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    margin: 0 -12px;
+    border-radius: var(--radius-sm);
+  }
+  </style>
 </head>
 <body>
   <div class="app-layout">
@@ -72,6 +83,37 @@
             </a>
           {% endif %}
         {% endfor %}
+
+        {% if session.get('role') == 'agent' and agent_sidebar_stats %}
+          <hr class="divider" style="margin: 12px 0 8px 0; opacity: 0.5;">
+          <div class="nav-section-label" style="padding-top: 4px;">My Performance</div>
+          <div style="padding: 10px 20px; font-size: 0.82rem; display: flex; flex-direction: column; gap: 4px;">
+            <div class="performance-item">
+              <span style="display:flex; align-items:center; gap:6px;">📞 Dialed Leads</span>
+              <strong style="color:var(--accent-1); font-weight:700;">{{ agent_sidebar_stats.dialed }}</strong>
+            </div>
+            <div class="performance-item">
+              <span style="display:flex; align-items:center; gap:6px;">✅ Connected</span>
+              <strong style="color:var(--success); font-weight:700;">{{ agent_sidebar_stats.connected }}</strong>
+            </div>
+            <div class="performance-item">
+              <span style="display:flex; align-items:center; gap:6px;">🔁 Follow Ups</span>
+              <span class="badge badge-warning" style="font-size:0.68rem; padding:2px 7px; border-radius:10px;">{{ agent_sidebar_stats.follow_ups }}</span>
+            </div>
+            <div class="performance-item">
+              <span style="display:flex; align-items:center; gap:6px;">⏳ Pending</span>
+              <span class="badge badge-info" style="font-size:0.68rem; padding:2px 7px; border-radius:10px;">{{ agent_sidebar_stats.pending }}</span>
+            </div>
+            <div class="performance-item">
+              <span style="display:flex; align-items:center; gap:6px;">💰 Converted</span>
+              <span class="badge badge-success" style="font-size:0.68rem; padding:2px 7px; border-radius:10px;">{{ agent_sidebar_stats.converted }}</span>
+            </div>
+            <div class="performance-item">
+              <span style="display:flex; align-items:center; gap:6px;">🗑️ Discarded</span>
+              <span class="badge badge-danger" style="font-size:0.68rem; padding:2px 7px; border-radius:10px;">{{ agent_sidebar_stats.discarded }}</span>
+            </div>
+          </div>
+        {% endif %}
       </nav>
 
       <div class="sidebar-user">

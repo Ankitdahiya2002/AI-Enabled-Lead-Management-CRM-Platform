@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}My Leads{% endblock %}
+{% block page_title %}My Leads{% endblock %}
+
+{% block content %}
+<div class="breadcrumb">
+  <a href="{{ url_for('agent_dashboard') }}">Campaigns</a>
+  <span class="sep">›</span>
+  <span class="current">My Leads</span>
+</div>
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>
+      {% if dialed_filter %}Dialed Leads
+      {% elif connected_filter %}Connected Leads
+      {% elif pending_filter %}Pending Leads
+      {% elif status_filter %}{{ status_filter }} Leads
+      {% else %}My Leads{% endif %}
+    </h1>
+    <p>{{ leads | length }} leads shown</p>
+  </div>
+</div>
+
+<!-- Filters -->
+<form method="GET" action="{{ url_for('agent_leads_list') }}">
+  <input type="hidden" name="dialed" value="{{ dialed_filter }}">
+  <input type="hidden" name="connected" value="{{ connected_filter }}">
+  <input type="hidden" name="pending" value="{{ pending_filter }}">
+  <div class="filters-bar">
+    <div class="search-bar">
+      <input type="text" name="search" placeholder="Search by name or phone..." value="{{ search }}">
+    </div>
+
+    <select name="status" class="form-control" onchange="this.form.submit()" style="width:auto;padding:8px 32px 8px 12px;">
+      <option value="">All Statuses</option>
+      <option value="Pending"          {% if status_filter=='Pending' %}selected{% endif %}>⏳ Pending</option>
+      <option value="Follow Up"        {% if status_filter=='Follow Up' %}selected{% endif %}>🔁 Follow Up</option>
+      <option value="Converted"        {% if status_filter=='Converted' %}selected{% endif %}>✅ Converted</option>
+      <option value="Already Enrolled" {% if status_filter=='Already Enrolled' %}selected{% endif %}>📋 Already Enrolled</option>
+      <option value="Not Interested"   {% if status_filter=='Not Interested' %}selected{% endif %}>❌ Not Interested</option>
+      <option value="Discarded"        {% if status_filter=='Discarded' %}selected{% endif %}>🗑 Discarded</option>
+    </select>
+
+    <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+    {% if search or status_filter or dialed_filter or connected_filter or pending_filter %}
+      <a href="{{ url_for('agent_leads_list') }}" class="btn btn-ghost btn-sm">✕ Clear Filters</a>
+    {% endif %}
+  </div>
+</form>
+
+<!-- Leads Table -->
+<div class="table-wrapper">
+  {% if leads %}
+  <table>
+    <thead>
+      <tr>
+        <th>Lead Name</th>
+        <th>Phone</th>
+        <th>Campaign</th>
+        <th>Bootcamp</th>
+        <th>Date</th>
+        <th>Level</th>
+        <th>Agent</th>
+        <th>Status</th>
+        <th>Attempts</th>
+        <th>Last Called</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for lead in leads %}
+      <tr style="cursor:pointer;" onclick="window.location='{{ url_for('agent_lead_detail', lead_id=lead.id) }}'">
+        <td>
+          <div style="font-weight:600;">{{ lead.lead_name or '—' }}</div>
+          {% if lead.email %}
+            <div style="font-size:0.75rem;color:var(--text-muted);">{{ lead.email }}</div>
+          {% endif %}
+        </td>
+        <td class="phone-num">{{ lead.contact_no | mask_phone(user.role) }}</td>
+        <td>
+          <span class="badge badge-purple">{{ lead.campaign_type | campaign_label }}</span>
+        </td>
+        <td style="max-width:180px;">
+          <div class="truncate" title="{{ lead.bootcamp_title }}">{{ lead.bootcamp_title or '—' }}</div>
+          {% if lead.amount %}
+            <div style="font-size:0.75rem;color:var(--text-muted);">{{ lead.amount | inr }}</div>
+          {% endif %}
+        </td>
+        <td class="muted" style="white-space: nowrap;">
+          <div>{{ lead.bootcamp_date or '—' }}</div>
+        </td>
+        <td>
+          <span class="{{ lead.priority | priority_class }}">{{ lead.priority | display_level(lead.campaign_type) }}</span>
+        </td>
+        <td>
+          {% if lead.contacted_by %}
+            <span class="agent-tag">🎧 {{ lead.contacted_by }}</span>
+          {% else %}
+            <span style="color:var(--text-muted);">—</span>
+          {% endif %}
+        </td>
+        <td>
+          <span class="badge {{ lead.final_status | status_class }}">{{ lead.final_status }}</span>
+        </td>
+        <td style="text-align:center;font-weight:600;">
+          {{ lead.total_attempts or 0 }}
+        </td>
+        <td class="muted text-sm" style="white-space: nowrap;">
+          {{ lead.last_call_date | format_dt if lead.last_call_date else '—' }}
+        </td>
+        <td onclick="event.stopPropagation()">
+          <a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}" class="btn btn-ghost btn-sm">📋 View</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Pagination -->
+  {% if page > 1 or leads | length == 30 %}
+  <div class="pagination">
+    {% if page > 1 %}
+      <a href="{{ url_for('agent_leads_list', page=page-1, status=status_filter, dialed=dialed_filter, connected=connected_filter, pending=pending_filter, search=search) }}"
+         class="page-btn">‹ Prev</a>
+    {% endif %}
+    <span class="page-btn active">{{ page }}</span>
+    {% if leads | length == 30 %}
+      <a href="{{ url_for('agent_leads_list', page=page+1, status=status_filter, dialed=dialed_filter, connected=connected_filter, pending=pending_filter, search=search) }}"
+         class="page-btn">Next ›</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="empty-state">
+    <span class="empty-icon">📭</span>
+    <h3>No leads found</h3>
+    <p>Try clearing your filters or check back later.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

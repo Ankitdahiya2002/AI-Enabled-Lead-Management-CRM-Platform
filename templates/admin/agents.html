@@ -29,85 +29,140 @@
   </div>
 </div>
 
-<div class="table-wrapper">
-  {% if agents %}
-  <div class="table-header">
-    <span class="table-title">All Agents</span>
-    <button class="btn btn-primary btn-sm" onclick="openModal('addAgentModal')">+ Add Agent</button>
-  </div>
-  <table>
-    <thead>
-      <tr>
-        <th>Agent</th>
-        <th>Email / Login</th>
-        <th>Role</th>
-        <th>Status</th>
-        <th>Created</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for agent in agents %}
-      <tr>
-        <td>
-          <div style="display:flex;align-items:center;gap:10px;">
-            <div class="user-avatar" style="width:36px;height:36px;font-size:0.85rem;flex-shrink:0;">
-              {{ agent.name[0].upper() if agent.name else '?' }}
+<div style="display:grid; grid-template-columns: 1fr; gap: 24px; align-items: start;" class="agents-page-grid" id="agentsGrid">
+  <div class="table-wrapper" style="margin-bottom:0;">
+    {% if agents %}
+    <div class="table-header">
+      <span class="table-title">All Agents</span>
+      <button class="btn btn-primary btn-sm" onclick="openModal('addAgentModal')">+ Add Agent</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Agent</th>
+          <th>Email / Login</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for agent in agents %}
+        <tr>
+          <td>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="user-avatar" style="width:36px;height:36px;font-size:0.85rem;flex-shrink:0;">
+                {{ agent.name[0].upper() if agent.name else '?' }}
+              </div>
+              <div>
+                <div style="font-weight:600;">{{ agent.name }}</div>
+                <div style="font-size:0.72rem;color:var(--text-muted);">ID: {{ agent.id[:8] }}…</div>
+              </div>
             </div>
-            <div>
-              <div style="font-weight:600;">{{ agent.name }}</div>
-              <div style="font-size:0.72rem;color:var(--text-muted);">ID: {{ agent.id[:8] }}…</div>
+          </td>
+          <td>
+            <div style="font-family:monospace;font-size:0.85rem;color:var(--text-primary);">{{ agent.email }}</div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">Use this to log in at /login</div>
+          </td>
+          <td>
+            <span class="badge {% if agent.role == 'admin' %}badge-green{% else %}badge-purple{% endif %}">
+              {{ '👑 Admin' if agent.role == 'admin' else '🎧 Agent' }}
+            </span>
+          </td>
+          <td>
+            <span class="badge {% if agent.is_active %}badge-success{% else %}badge-danger{% endif %}">
+              {{ '✅ Active' if agent.is_active else '🚫 Inactive' }}
+            </span>
+          </td>
+          <td class="muted">{{ agent.created_at | format_dt }}</td>
+          <td>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-ghost btn-sm" style="color:var(--text-accent);border-color:rgba(124,58,237,0.15);"
+                      onclick="showAgentStats('{{ agent.name }}', '{{ agent.email }}')"
+                      title="View performance statistics">
+                📊 Stats
+              </button>
+              <button class="btn btn-ghost btn-sm"
+                      onclick="showResetModal('{{ agent.id }}', '{{ agent.name }}', '{{ agent.email }}')"
+                      title="Reset password">
+                🔑 Reset
+              </button>
+              {% if agent.is_active %}
+              <form method="POST" action="{{ url_for('admin_toggle_agent', agent_id=agent.id) }}"
+                    onsubmit="return confirm('Deactivate {{ agent.name }}? They will not be able to log in.')">
+                <input type="hidden" name="action" value="deactivate">
+                <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--danger);">🚫 Deactivate</button>
+              </form>
+              {% else %}
+              <form method="POST" action="{{ url_for('admin_toggle_agent', agent_id=agent.id) }}">
+                <input type="hidden" name="action" value="activate">
+                <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--success);">✅ Activate</button>
+              </form>
+              {% endif %}
             </div>
-          </div>
-        </td>
-        <td>
-          <div style="font-family:monospace;font-size:0.85rem;color:var(--text-primary);">{{ agent.email }}</div>
-          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">Use this to log in at /login</div>
-        </td>
-        <td>
-          <span class="badge {% if agent.role == 'admin' %}badge-green{% else %}badge-purple{% endif %}">
-            {{ '👑 Admin' if agent.role == 'admin' else '🎧 Agent' }}
-          </span>
-        </td>
-        <td>
-          <span class="badge {% if agent.is_active %}badge-success{% else %}badge-danger{% endif %}">
-            {{ '✅ Active' if agent.is_active else '🚫 Inactive' }}
-          </span>
-        </td>
-        <td class="muted">{{ agent.created_at | format_dt }}</td>
-        <td>
-          <div style="display:flex;gap:6px;">
-            <button class="btn btn-ghost btn-sm"
-                    onclick="showResetModal('{{ agent.id }}', '{{ agent.name }}', '{{ agent.email }}')"
-                    title="Reset password">
-              🔑 Reset
-            </button>
-            {% if agent.is_active %}
-            <form method="POST" action="{{ url_for('admin_toggle_agent', agent_id=agent.id) }}"
-                  onsubmit="return confirm('Deactivate {{ agent.name }}? They will not be able to log in.')">
-              <input type="hidden" name="action" value="deactivate">
-              <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--danger);">🚫 Deactivate</button>
-            </form>
-            {% else %}
-            <form method="POST" action="{{ url_for('admin_toggle_agent', agent_id=agent.id) }}">
-              <input type="hidden" name="action" value="activate">
-              <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--success);">✅ Activate</button>
-            </form>
-            {% endif %}
-          </div>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <div class="empty-state">
-    <span class="empty-icon">🎧</span>
-    <h3>No agents yet</h3>
-    <p>Add your first agent to get started. They'll be able to log in at the same URL.</p>
-    <button class="btn btn-primary mt-3" onclick="openModal('addAgentModal')">+ Add Agent</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+      <span class="empty-icon">🎧</span>
+      <h3>No agents yet</h3>
+      <p>Add your first agent to get started. They'll be able to log in at the same URL.</p>
+      <button class="btn btn-primary mt-3" onclick="openModal('addAgentModal')">+ Add Agent</button>
+    </div>
+    {% endif %}
   </div>
-  {% endif %}
+
+  <!-- Sidebar Panel for Agent Performance Stats -->
+  <div class="card" id="agentStatsSidebar" style="display:none; position:sticky; top:20px; border-top: 3px solid var(--accent-1); background:var(--bg-card); border-radius:var(--radius-lg); padding:24px; box-shadow:var(--shadow-md);">
+    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:16px;">
+      <h3 style="margin:0; font-size:1.15rem; color:var(--text-accent); display:flex; align-items:center; gap:8px;">📊 Performance Stats</h3>
+      <span style="cursor:pointer; font-weight:700; color:var(--text-muted); font-size:1.1rem; padding:4px;" onclick="closeStatsSidebar()">✕</span>
+    </div>
+    
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px; background:rgba(139,92,246,0.04); border:1px solid var(--border); border-radius:var(--radius); padding:12px;">
+      <div class="user-avatar" id="sidebarAvatar" style="width:44px; height:44px; font-size:1.1rem; flex-shrink:0;">?</div>
+      <div style="min-width:0; flex:1;">
+        <div style="font-weight:700; font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" id="sidebarName">—</div>
+        <div style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" id="sidebarEmail">—</div>
+      </div>
+    </div>
+    
+    <!-- Primary dials -->
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+      <div class="card" style="padding:12px; background:rgba(99,102,241,0.06); border-color:rgba(99,102,241,0.15); text-align:center; border-radius:var(--radius);">
+        <div style="font-size:0.7rem; text-transform:uppercase; color:var(--text-secondary); font-weight:700; letter-spacing:0.04em;">Dialed Leads</div>
+        <div style="font-size:1.6rem; font-weight:800; margin-top:4px; color:var(--accent-1);" id="statDialed">0</div>
+      </div>
+      <div class="card" style="padding:12px; background:rgba(16,185,129,0.06); border-color:rgba(16,185,129,0.15); text-align:center; border-radius:var(--radius);">
+        <div style="font-size:0.7rem; text-transform:uppercase; color:var(--text-secondary); font-weight:700; letter-spacing:0.04em;">Connected</div>
+        <div style="font-size:1.6rem; font-weight:800; margin-top:4px; color:var(--success);" id="statConnected">0</div>
+      </div>
+    </div>
+    
+    <!-- Detailed counts list -->
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:var(--bg-elevated); border-radius:var(--radius); border:1px solid var(--border);">
+        <span style="font-weight:600; font-size:0.85rem; color:var(--text-primary); display:flex; align-items:center; gap:8px;">🔁 Follow Ups</span>
+        <span class="badge badge-warning" id="statFollowups" style="font-weight:700; font-size:0.8rem; padding:4px 10px; border-radius:12px;">0</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:var(--bg-elevated); border-radius:var(--radius); border:1px solid var(--border);">
+        <span style="font-weight:600; font-size:0.85rem; color:var(--text-primary); display:flex; align-items:center; gap:8px;">⏳ Pending</span>
+        <span class="badge badge-info" id="statPending" style="font-weight:700; font-size:0.8rem; padding:4px 10px; border-radius:12px;">0</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:var(--bg-elevated); border-radius:var(--radius); border:1px solid var(--border);">
+        <span style="font-weight:600; font-size:0.85rem; color:var(--text-primary); display:flex; align-items:center; gap:8px;">💰 Converted</span>
+        <span class="badge badge-success" id="statConverted" style="font-weight:700; font-size:0.8rem; padding:4px 10px; border-radius:12px;">0</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:var(--bg-elevated); border-radius:var(--radius); border:1px solid var(--border);">
+        <span style="font-weight:600; font-size:0.85rem; color:var(--text-primary); display:flex; align-items:center; gap:8px;">🗑️ Discarded</span>
+        <span class="badge badge-danger" id="statDiscarded" style="font-weight:700; font-size:0.8rem; padding:4px 10px; border-radius:12px;">0</span>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ── Add Agent Modal ──────────────────────────────────────────────────── -->
@@ -183,6 +238,16 @@
 
 {% endblock %}
 
+{% block head %}
+<style>
+@media (min-width: 1024px) {
+  .agents-page-grid.sidebar-open {
+    grid-template-columns: 1fr 340px !important;
+  }
+}
+</style>
+{% endblock %}
+
 {% block scripts %}
 <script>
 function openModal(id) { document.getElementById(id).classList.add('open'); }
@@ -204,6 +269,38 @@ function showResetModal(id, name, email) {
 function togglePwd() {
   const f = document.getElementById('agentPwd');
   f.type = f.type === 'password' ? 'text' : 'password';
+}
+
+const agentStatsMap = {{ stats_map | tojson | safe }};
+
+function showAgentStats(name, email) {
+  const stats = agentStatsMap[name] || {
+    dialed: 0,
+    connected: 0,
+    follow_ups: 0,
+    pending: 0,
+    converted: 0,
+    discarded: 0
+  };
+  
+  document.getElementById('sidebarName').textContent = name;
+  document.getElementById('sidebarEmail').textContent = email;
+  document.getElementById('sidebarAvatar').textContent = name ? name[0].toUpperCase() : '?';
+  
+  document.getElementById('statDialed').textContent = stats.dialed;
+  document.getElementById('statConnected').textContent = stats.connected;
+  document.getElementById('statFollowups').textContent = stats.follow_ups;
+  document.getElementById('statPending').textContent = stats.pending;
+  document.getElementById('statConverted').textContent = stats.converted;
+  document.getElementById('statDiscarded').textContent = stats.discarded;
+  
+  document.getElementById('agentsGrid').classList.add('sidebar-open');
+  document.getElementById('agentStatsSidebar').style.display = 'block';
+}
+
+function closeStatsSidebar() {
+  document.getElementById('agentsGrid').classList.remove('sidebar-open');
+  document.getElementById('agentStatsSidebar').style.display = 'none';
 }
 </script>
 {% endblock %}

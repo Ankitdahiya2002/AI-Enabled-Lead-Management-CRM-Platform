@@ -65,6 +65,70 @@ def get_current_user():
     return None
 
 
+@app.context_processor
+def inject_agent_stats():
+    user = get_current_user()
+    if not user or user.get('role') != 'agent':
+        return {}
+    
+    agent_name = user['name']
+    stats = {
+        'dialed': 0,
+        'connected': 0,
+        'follow_ups': 0,
+        'pending': 0,
+        'converted': 0,
+        'discarded': 0
+    }
+    
+    try:
+        calls_resp = supabase_admin.table('call_attempts') \
+            .select('lead_id, connected') \
+            .eq('agent_name', agent_name) \
+            .execute()
+        calls = calls_resp.data or []
+        
+        dialed_lids = set()
+        connected_lids = set()
+        for c in calls:
+            lid = c.get('lead_id')
+            dialed_lids.add(lid)
+            if c.get('connected'):
+                connected_lids.add(lid)
+        
+        stats['dialed'] = len(dialed_lids)
+        stats['connected'] = len(connected_lids)
+    except Exception as e:
+        app.logger.error(f"Error context processor call_attempts: {e}")
+        
+    try:
+        leads_resp = supabase_admin.table('leads') \
+            .select('final_status, agent_name, contacted_by') \
+            .execute()
+        leads = leads_resp.data or []
+        
+        for l in leads:
+            status = l.get('final_status')
+            contacted_by = l.get('contacted_by')
+            assigned_str = l.get('agent_name') or ''
+            assigned_agents = [a.strip() for a in assigned_str.split(',') if a.strip()]
+            
+            if contacted_by == agent_name:
+                if status == 'Converted':
+                    stats['converted'] += 1
+                elif status == 'Discarded':
+                    stats['discarded'] += 1
+                elif status == 'Follow Up':
+                    stats['follow_ups'] += 1
+            
+            # stats['pending'] is no longer accumulated by status == 'Pending'
+    except Exception as e:
+        app.logger.error(f"Error context processor leads: {e}")
+        
+    stats['pending'] = max(0, stats['dialed'] - stats['connected'])
+    return {'agent_sidebar_stats': stats}
+
+
 # ============================================================
 # AGENT CAMPAIGN TEAMS AND MAPPINGS
 # ============================================================
@@ -827,6 +891,83 @@ def admin_leads_bulk_delete():
     return redirect(url_for('admin_leads'))
 
 
+def get_agents_stats():
+    stats = {}
+    try:
+        agents = supabase_admin.table('profiles').select('name').eq('role', 'agent').execute()
+        for a in (agents.data or []):
+            stats[a['name']] = {
+                'dialed': 0,
+                'connected': 0,
+                'follow_ups': 0,
+                'pending': 0,
+                'converted': 0,
+                'discarded': 0
+            }
+    except Exception as e:
+        app.logger.error(f"Error fetching agent profiles for stats: {e}")
+        return stats
+
+    try:
+        calls_resp = supabase_admin.table('call_attempts').select('lead_id, agent_name, connected').execute()
+        calls = calls_resp.data or []
+        
+        dialed_leads = {}
+        connected_leads = {}
+        
+        for c in calls:
+            ag = c.get('agent_name')
+            if not ag:
+                continue
+            lid = c.get('lead_id')
+            conn = c.get('connected', False)
+            
+            if ag not in dialed_leads:
+                dialed_leads[ag] = set()
+            dialed_leads[ag].add(lid)
+            
+            if conn:
+                if ag not in connected_leads:
+                    connected_leads[ag] = set()
+                connected_leads[ag].add(lid)
+                
+        for ag, ls in dialed_leads.items():
+            if ag in stats:
+                stats[ag]['dialed'] = len(ls)
+        for ag, ls in connected_leads.items():
+            if ag in stats:
+                stats[ag]['connected'] = len(ls)
+    except Exception as e:
+        app.logger.error(f"Error querying call attempts for stats: {e}")
+
+    try:
+        leads_resp = supabase_admin.table('leads').select('agent_name, contacted_by, final_status').execute()
+        leads = leads_resp.data or []
+        
+        for l in leads:
+            status = l.get('final_status')
+            contacted_by = l.get('contacted_by')
+            assigned_str = l.get('agent_name') or ''
+            assigned_agents = [a.strip() for a in assigned_str.split(',') if a.strip()]
+            
+            if contacted_by in stats:
+                if status == 'Converted':
+                    stats[contacted_by]['converted'] += 1
+                elif status == 'Discarded':
+                    stats[contacted_by]['discarded'] += 1
+                elif status == 'Follow Up':
+                    stats[contacted_by]['follow_ups'] += 1
+            
+            # stats[ag]['pending'] is no longer accumulated by status == 'Pending'
+    except Exception as e:
+        app.logger.error(f"Error querying leads for stats: {e}")
+        
+    for ag in stats:
+        stats[ag]['pending'] = max(0, stats[ag]['dialed'] - stats[ag]['connected'])
+        
+    return stats
+
+
 @app.route('/admin/agents')
 @admin_required
 def admin_agents():
@@ -834,10 +975,12 @@ def admin_agents():
     try:
         agents = supabase_admin.table('profiles').select('*').eq('role', 'agent').order('name').execute()
         agents_data = agents.data or []
+        stats_map = get_agents_stats()
     except Exception as e:
         agents_data = []
+        stats_map = {}
         flash(f'Error: {e}', 'error')
-    return render_template('admin/agents.html', user=user, agents=agents_data)
+    return render_template('admin/agents.html', user=user, agents=agents_data, stats_map=stats_map)
 
 
 @app.route('/admin/agents/create', methods=['POST'])
@@ -1424,6 +1567,82 @@ def agent_followups():
                            campaign_filter=campaign_filter,
                            priority_filter=priority_filter,
                            campaigns_list=campaigns_list)
+
+
+@app.route('/agent/leads')
+@login_required
+def agent_leads_list():
+    user = get_current_user()
+    agent_name = user['name']
+    is_admin = user['role'] == 'admin'
+
+    status_filter = request.args.get('status', '')
+    dialed_filter = request.args.get('dialed', '')
+    connected_filter = request.args.get('connected', '')
+    pending_filter = request.args.get('pending', '')
+    search = request.args.get('search', '').strip()
+    page = int(request.args.get('page', 1))
+    per_page = 30
+
+    if not is_admin:
+        allowed = get_agent_allowed_campaigns(agent_name)
+        if not allowed:
+            return render_template('agent/leads_list.html', user=user, leads=[], page=page, status_filter=status_filter, dialed_filter=dialed_filter, connected_filter=connected_filter, pending_filter=pending_filter)
+
+    try:
+        if dialed_filter or connected_filter or pending_filter:
+            # We filter by call attempts
+            call_query = supabase_admin.table('call_attempts').select('lead_id, connected')
+            if not is_admin:
+                call_query = call_query.eq('agent_name', agent_name)
+            if connected_filter:
+                call_query = call_query.eq('connected', True)
+            
+            call_res = call_query.execute()
+            
+            if pending_filter:
+                dialed_lids = set()
+                connected_lids = set()
+                for c in (call_res.data or []):
+                    lid = c.get('lead_id')
+                    dialed_lids.add(lid)
+                    if c.get('connected'):
+                        connected_lids.add(lid)
+                lead_ids = list(dialed_lids - connected_lids)
+            else:
+                lead_ids = list(set([c['lead_id'] for c in (call_res.data or [])]))
+            
+            if not lead_ids:
+                return render_template('agent/leads_list.html', user=user, leads=[], page=page, status_filter=status_filter, dialed_filter=dialed_filter, connected_filter=connected_filter, pending_filter=pending_filter)
+            
+            query = supabase_admin.table('leads').select('*').in_('id', lead_ids)
+        else:
+            query = supabase_admin.table('leads').select('*')
+            if not is_admin:
+                query = query.ilike('agent_name', f'%{agent_name}%')
+                query = query.or_(f"final_status.neq.Follow Up,contacted_by.is.null,contacted_by.eq.{agent_name}")
+
+        if status_filter:
+            query = query.eq('final_status', status_filter)
+        if search:
+            query = query.or_(f'lead_name.ilike.%{search}%,contact_no.ilike.%{search}%,bootcamp_title.ilike.%{search}%')
+
+        offset = (page - 1) * per_page
+        result = query.order('updated_at', desc=True).range(offset, offset + per_page - 1).execute()
+        leads = result.data or []
+    except Exception as e:
+        leads = []
+        flash(f'Error loading leads: {e}', 'error')
+
+    return render_template('agent/leads_list.html',
+                           user=user,
+                           leads=leads,
+                           page=page,
+                           status_filter=status_filter,
+                           dialed_filter=dialed_filter,
+                           connected_filter=connected_filter,
+                           pending_filter=pending_filter,
+                           search=search)
 
 
 # ============================================================
