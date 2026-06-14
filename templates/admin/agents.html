@@ -91,7 +91,7 @@
           </td>
           <td class="muted">{{ agent.created_at | format_dt }}</td>
           <td>
-            <div style="display:flex;gap:6px;align-items:center;">
+            <div style="display:flex;gap:6px;align-items:center;white-space:nowrap;min-width:380px;">
               <button class="btn btn-ghost btn-sm" style="color:var(--text-accent);border-color:rgba(124,58,237,0.15);"
                       onclick="showAgentStats('{{ agent.name }}', '{{ agent.email }}')"
                       title="View performance statistics">

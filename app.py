@@ -103,23 +103,19 @@ def inject_agent_stats():
         
     try:
         leads_resp = supabase_admin.table('leads') \
-            .select('final_status, agent_name, contacted_by') \
+            .select('final_status') \
+            .eq('contacted_by', agent_name) \
             .execute()
         leads = leads_resp.data or []
         
         for l in leads:
             status = l.get('final_status')
-            contacted_by = l.get('contacted_by')
-            assigned_str = l.get('agent_name') or ''
-            assigned_agents = [a.strip() for a in assigned_str.split(',') if a.strip()]
-            
-            if contacted_by == agent_name:
-                if status == 'Converted':
-                    stats['converted'] += 1
-                elif status == 'Discarded':
-                    stats['discarded'] += 1
-                elif status == 'Follow Up':
-                    stats['follow_ups'] += 1
+            if status == 'Converted':
+                stats['converted'] += 1
+            elif status == 'Discarded':
+                stats['discarded'] += 1
+            elif status in ['Follow Up', 'Call Back Later']:
+                stats['follow_ups'] += 1
             
             # stats['pending'] is no longer accumulated by status == 'Pending'
     except Exception as e:
@@ -305,7 +301,7 @@ def admin_dashboard():
         queries = {
             'total': supabase_admin.table('leads').select('id', count='exact'),
             'converted': supabase_admin.table('leads').select('id', count='exact').eq('final_status', 'Converted'),
-            'follow_up': supabase_admin.table('leads').select('id', count='exact').eq('final_status', 'Follow Up'),
+            'follow_up': supabase_admin.table('leads').select('id', count='exact').in_('final_status', ['Follow Up', 'Call Back Later']),
         }
         for ct in campaign_types:
             queries[f'camp_{ct}'] = supabase_admin.table('leads').select('id', count='exact').eq('campaign_type', ct)
@@ -350,7 +346,7 @@ def admin_dashboard():
         follow_up_all_resp = supabase_admin.table('leads') \
             .select('id,lead_name,contact_no,bootcamp_title,campaign_type,'
                     'priority,agent_name,final_status,last_call_date,updated_at,contacted_by') \
-            .eq('final_status', 'Follow Up') \
+            .in_('final_status', ['Follow Up', 'Call Back Later']) \
             .limit(1000) \
             .execute()
         follow_up_all = follow_up_all_resp.data or []
@@ -370,7 +366,7 @@ def admin_dashboard():
                 attempts_resp = supabase_admin.table('call_attempts')\
                     .select('lead_id,follow_up_date,follow_up_time')\
                     .in_('lead_id', chunk)\
-                    .eq('call_status', 'follow_up')\
+                    .in_('call_status', ['follow_up', 'call_back_later'])\
                     .order('called_at', desc=True)\
                     .execute()
                 attempts_data.extend(attempts_resp.data or [])
@@ -472,6 +468,20 @@ def admin_export_report():
     import csv
     import io
     from flask import Response
+    from datetime import timedelta
+
+    ist_tz = timezone(timedelta(hours=5, minutes=30))
+
+    def format_to_ist(dt_str):
+        if not dt_str:
+            return ''
+        try:
+            # Replace Z with UTC offset if present to handle standard ISO formats
+            dt_utc = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+            dt_ist = dt_utc.astimezone(ist_tz)
+            return dt_ist.strftime('%Y-%m-%d %I:%M %p')
+        except Exception:
+            return dt_str
 
     all_leads = []
     limit = 1000
@@ -479,8 +489,6 @@ def admin_export_report():
     
     try:
         while True:
-            # We want to select all lead columns AND their related call attempts.
-            # Supabase Postgrest syntax: leads(*, call_attempts(*))
             res = supabase_admin.table('leads')\
                 .select('*, call_attempts(*)')\
                 .range(offset, offset + limit - 1)\
@@ -501,15 +509,27 @@ def admin_export_report():
     si = io.StringIO()
     cw = csv.writer(si)
     
-    # Header row
-    cw.writerow([
+    # Headers
+    headers = [
         'Lead ID', 'Lead Name', 'Phone', 'Email', 'Campaign Type',
         'Bootcamp Title', 'Bootcamp Date', 'Priority', 'Assigned Agent',
         'Final Status', 'Total Attempts (Calls)', 'Last Called At', 'Contacted By Agent',
         'Original Upload Amount', 'Original Payment Status', 'Original Payment Mode', 'Original Coupon Code',
         'Amount Paid on Conversion', 'Token Amount', 'Discount Amount', 'Bootcamp Price (Conversion)',
-        'Payment Mode on Conversion', 'Payment Reference', 'Call History Summary'
-    ])
+        'Payment Mode on Conversion', 'Payment Reference'
+    ]
+    
+    # Add separate columns for Attempts 1 to 10
+    for i in range(1, 11):
+        headers.extend([
+            f'Attempt {i} Time',
+            f'Attempt {i} Agent',
+            f'Attempt {i} Status',
+            f'Attempt {i} Disposition',
+            f'Attempt {i} Comments'
+        ])
+        
+    cw.writerow(headers)
     
     for lead in all_leads:
         attempts = lead.get('call_attempts') or []
@@ -519,6 +539,16 @@ def admin_export_report():
         total_calls = len(attempts)
         last_called_at = lead.get('last_call_date') or ''
         
+        # Resolve actual agent name for Assigned Agent column
+        actual_agent = lead.get('contacted_by') or ''
+        if not actual_agent:
+            raw_agent = lead.get('agent_name') or ''
+            agents_list = [a.strip() for a in raw_agent.split(',') if a.strip()]
+            if len(agents_list) == 1:
+                actual_agent = agents_list[0]
+            else:
+                actual_agent = ''
+
         # Payment details on conversion
         conv_amount_paid = ''
         conv_token_amount = ''
@@ -527,7 +557,6 @@ def admin_export_report():
         conv_payment_mode = ''
         conv_payment_ref = ''
         
-        # Look for the conversion attempt
         for att in attempts:
             if att.get('call_status') == 'converted':
                 conv_amount_paid = att.get('amount_paid') or ''
@@ -538,33 +567,7 @@ def admin_export_report():
                 conv_payment_ref = att.get('payment_reference') or ''
                 break
                 
-        # Call history summary text
-        call_history_parts = []
-        for att in attempts:
-            num = att.get('attempt_number', 1)
-            agent = att.get('agent_name') or 'unknown agent'
-            dt = att.get('called_at') or ''
-            # Format date string for readability
-            if dt:
-                try:
-                    dt = datetime.fromisoformat(dt).strftime('%Y-%m-%d %H:%M')
-                except Exception:
-                    pass
-            
-            connected = att.get('connected')
-            status_desc = ''
-            if connected:
-                status_desc = f"Connected ({att.get('call_status') or ''})"
-            else:
-                status_desc = f"Not Connected ({att.get('not_connected_reason') or ''})"
-                
-            comments = att.get('comments') or ''
-            comment_str = f" - Comments: {comments}" if comments else ""
-            call_history_parts.append(f"Attempt {num}: {status_desc} by {agent} on {dt}{comment_str}")
-            
-        history_summary = " | ".join(call_history_parts)
-        
-        cw.writerow([
+        lead_row = [
             lead.get('id'),
             lead.get('lead_name') or '',
             lead.get('contact_no') or '',
@@ -573,10 +576,10 @@ def admin_export_report():
             lead.get('bootcamp_title') or '',
             lead.get('bootcamp_date') or '',
             lead.get('priority') or '',
-            lead.get('agent_name') or '',
+            actual_agent,
             lead.get('final_status') or '',
             total_calls,
-            last_called_at,
+            format_to_ist(last_called_at),
             lead.get('contacted_by') or '',
             lead.get('amount') or '',
             lead.get('payment_status') or '',
@@ -587,9 +590,45 @@ def admin_export_report():
             conv_discount_amount,
             conv_bootcamp_price,
             conv_payment_mode,
-            conv_payment_ref,
-            history_summary
-        ])
+            conv_payment_ref
+        ]
+        
+        # Populate attempts columns up to 10
+        attempt_cols = []
+        for i in range(10):
+            if i < len(attempts):
+                att = attempts[i]
+                att_time = format_to_ist(att.get('called_at'))
+                att_agent = att.get('agent_name') or ''
+                
+                connected = att.get('connected')
+                att_status = 'Connected' if connected else 'Not Connected'
+                
+                if connected:
+                    call_status_label = att.get('call_status') or ''
+                    disp = att.get('disposition') or ''
+                    att_disp = f"{call_status_label.title().replace('_', ' ')} ({disp})" if disp else call_status_label.title().replace('_', ' ')
+                else:
+                    reason = att.get('not_connected_reason') or ''
+                    att_disp = reason.title().replace('_', ' ')
+                    
+                att_comments = att.get('comments') or ''
+            else:
+                att_time = ''
+                att_agent = ''
+                att_status = ''
+                att_disp = ''
+                att_comments = ''
+                
+            attempt_cols.extend([
+                att_time,
+                att_agent,
+                att_status,
+                att_disp,
+                att_comments
+            ])
+            
+        cw.writerow(lead_row + attempt_cols)
         
     response = Response(si.getvalue(), mimetype='text/csv')
     response.headers['Content-Disposition'] = 'attachment; filename=tfu_detailed_report.csv'
@@ -668,8 +707,7 @@ def admin_upload():
             if agent_names:
                 all_agents_str = ", ".join(agent_names)
                 for lead in leads:
-                    if not lead.get('agent_name'):
-                        lead['agent_name'] = all_agents_str
+                    lead['agent_name'] = all_agents_str
         except Exception as e:
             return jsonify({'success': False, 'error': f'Parse error: {str(e)}'}), 500
 
@@ -737,8 +775,10 @@ def admin_upload():
 
     # Fetch active agents for assignment dropdown
     try:
-        agents_resp = supabase_admin.table('profiles').select('id,name').eq('role', 'agent').eq('is_active', True).execute()
+        agents_resp = supabase_admin.table('profiles').select('id,name,campaigns').eq('role', 'agent').eq('is_active', True).execute()
         agents = agents_resp.data or []
+        for agent in agents:
+            agent['allowed_campaigns'] = get_agent_allowed_campaigns(agent['name'])
     except Exception:
         agents = []
 
@@ -956,21 +996,19 @@ def get_agents_stats():
         app.logger.error(f"Error querying call attempts for stats: {e}")
 
     try:
-        leads_resp = supabase_admin.table('leads').select('agent_name, contacted_by, final_status').execute()
+        leads_resp = supabase_admin.table('leads').select('contacted_by, final_status').not_.is_('contacted_by', 'null').execute()
         leads = leads_resp.data or []
         
         for l in leads:
             status = l.get('final_status')
             contacted_by = l.get('contacted_by')
-            assigned_str = l.get('agent_name') or ''
-            assigned_agents = [a.strip() for a in assigned_str.split(',') if a.strip()]
             
             if contacted_by in stats:
                 if status == 'Converted':
                     stats[contacted_by]['converted'] += 1
                 elif status == 'Discarded':
                     stats[contacted_by]['discarded'] += 1
-                elif status == 'Follow Up':
+                elif status in ['Follow Up', 'Call Back Later']:
                     stats[contacted_by]['follow_ups'] += 1
             
             # stats[ag]['pending'] is no longer accumulated by status == 'Pending'
@@ -1151,7 +1189,7 @@ def agent_dashboard():
             # Total
             q_tot = supabase_admin.table('leads').select('id', count='exact').eq('campaign_type', ct)
             if not is_admin:
-                q_tot = q_tot.ilike('agent_name', f'%{agent_name}%').or_(f"final_status.neq.Follow Up,contacted_by.is.null,contacted_by.eq.{agent_name}")
+                q_tot = q_tot.ilike('agent_name', f'%{agent_name}%').or_(f"final_status.not.in.(\"Follow Up\",\"Call Back Later\"),contacted_by.is.null,contacted_by.eq.{agent_name}")
             queries[f'{ct}_total'] = q_tot
 
             # Pending
@@ -1161,7 +1199,7 @@ def agent_dashboard():
             queries[f'{ct}_pending'] = q_pend
 
             # Follow Up
-            q_fu = supabase_admin.table('leads').select('id', count='exact').eq('campaign_type', ct).eq('final_status', 'Follow Up')
+            q_fu = supabase_admin.table('leads').select('id', count='exact').eq('campaign_type', ct).in_('final_status', ['Follow Up', 'Call Back Later'])
             if not is_admin:
                 q_fu = q_fu.ilike('agent_name', f'%{agent_name}%').or_(f"contacted_by.is.null,contacted_by.eq.{agent_name}")
             queries[f'{ct}_fu'] = q_fu
@@ -1236,9 +1274,12 @@ def agent_campaign(campaign_type):
         query = supabase_admin.table('leads').select('*').eq('campaign_type', campaign_type)
         if not is_admin:
             query = query.ilike('agent_name', f'%{agent_name}%')
-            query = query.or_(f"final_status.neq.Follow Up,contacted_by.is.null,contacted_by.eq.{agent_name}")
+            query = query.or_(f"final_status.not.in.(\"Follow Up\",\"Call Back Later\"),contacted_by.is.null,contacted_by.eq.{agent_name}")
         if status_filter:
-            query = query.eq('final_status', status_filter)
+            if status_filter == 'Follow Up':
+                query = query.in_('final_status', ['Follow Up', 'Call Back Later'])
+            else:
+                query = query.eq('final_status', status_filter)
         if priority_filter:
             query = query.eq('priority', priority_filter)
         if search:
@@ -1286,7 +1327,7 @@ def agent_lead_detail(lead_id):
             if agent_name not in assigned_agents:
                 flash('Access denied.', 'error')
                 return redirect(url_for('agent_dashboard'))
-            if lead.get('final_status') == 'Follow Up' and lead.get('contacted_by') and lead.get('contacted_by') != agent_name:
+            if lead.get('final_status') in ['Follow Up', 'Call Back Later'] and lead.get('contacted_by') and lead.get('contacted_by') != agent_name:
                 flash('Access denied. This follow-up is owned by another agent.', 'error')
                 return redirect(url_for('agent_dashboard'))
 
@@ -1327,7 +1368,7 @@ def agent_call_log(lead_id):
             if agent_name not in assigned_agents:
                 flash('Access denied.', 'error')
                 return redirect(url_for('agent_dashboard'))
-            if lead.get('final_status') == 'Follow Up' and lead.get('contacted_by') and lead.get('contacted_by') != agent_name:
+            if lead.get('final_status') in ['Follow Up', 'Call Back Later'] and lead.get('contacted_by') and lead.get('contacted_by') != agent_name:
                 flash('Access denied. This follow-up is owned by another agent.', 'error')
                 return redirect(url_for('agent_dashboard'))
 
@@ -1375,7 +1416,7 @@ def agent_call_log(lead_id):
                 call_data['disposition'] = request.form.get('disposition', '')
                 call_data['comments'] = request.form.get('comments', '')
 
-                if call_status == 'follow_up':
+                if call_status in ['follow_up', 'call_back_later']:
                     fu_date_str = request.form.get('follow_up_date', '').strip()
                     fu_time_str = request.form.get('follow_up_time', '').strip()
 
@@ -1411,6 +1452,16 @@ def agent_call_log(lead_id):
                     call_data['payment_reference'] = request.form.get('payment_reference', '')
 
             supabase_admin.table('call_attempts').insert(call_data).execute()
+
+            # Mark all prior pending follow-ups for this lead as done
+            try:
+                supabase_admin.table('call_attempts')\
+                    .update({'follow_up_done': True})\
+                    .eq('lead_id', lead_id)\
+                    .eq('follow_up_done', False)\
+                    .execute()
+            except Exception as fu_err:
+                app.logger.error(f"Error marking previous follow-ups as done: {fu_err}")
 
             # Set contacted_by to the agent who logged the call
             try:
@@ -1488,7 +1539,7 @@ def agent_followup(lead_id):
             if agent_name not in assigned_agents:
                 flash('Access denied.', 'error')
                 return redirect(url_for('agent_dashboard'))
-            if lead.get('final_status') == 'Follow Up' and lead.get('contacted_by') and lead.get('contacted_by') != agent_name:
+            if lead.get('final_status') in ['Follow Up', 'Call Back Later'] and lead.get('contacted_by') and lead.get('contacted_by') != agent_name:
                 flash('Access denied. This follow-up is owned by another agent.', 'error')
                 return redirect(url_for('agent_dashboard'))
 
@@ -1497,7 +1548,7 @@ def agent_followup(lead_id):
 
         # Find last conversion
         conversion = next((c for c in reversed(calls) if c.get('call_status') == 'converted'), None)
-        follow_ups = [c for c in calls if c.get('call_status') == 'follow_up']
+        follow_ups = [c for c in calls if c.get('call_status') in ['follow_up', 'call_back_later']]
     except Exception as e:
         flash(f'Error: {e}', 'error')
         return redirect(url_for('agent_dashboard'))
@@ -1542,7 +1593,7 @@ def agent_followups():
             # Short-circuit if non-admin has no allowed campaigns
             leads = []
         else:
-            query = supabase_admin.table('leads').select('*').eq('final_status', 'Follow Up')
+            query = supabase_admin.table('leads').select('*').in_('final_status', ['Follow Up', 'Call Back Later'])
             if not is_admin:
                 query = query.ilike('agent_name', f'%{agent_name}%')
                 query = query.or_(f"contacted_by.is.null,contacted_by.eq.{agent_name}")
@@ -1572,7 +1623,7 @@ def agent_followups():
                 attempts_resp = supabase_admin.table('call_attempts')\
                     .select('lead_id,follow_up_date,follow_up_time')\
                     .in_('lead_id', lead_ids)\
-                    .eq('call_status', 'follow_up')\
+                    .in_('call_status', ['follow_up', 'call_back_later'])\
                     .order('called_at', desc=True)\
                     .execute()
 
@@ -1653,10 +1704,13 @@ def agent_leads_list():
             query = supabase_admin.table('leads').select('*')
             if not is_admin:
                 query = query.ilike('agent_name', f'%{agent_name}%')
-                query = query.or_(f"final_status.neq.Follow Up,contacted_by.is.null,contacted_by.eq.{agent_name}")
+                query = query.or_(f"final_status.not.in.(\"Follow Up\",\"Call Back Later\"),contacted_by.is.null,contacted_by.eq.{agent_name}")
 
         if status_filter:
-            query = query.eq('final_status', status_filter)
+            if status_filter == 'Follow Up':
+                query = query.in_('final_status', ['Follow Up', 'Call Back Later'])
+            else:
+                query = query.eq('final_status', status_filter)
         if search:
             query = query.or_(f'lead_name.ilike.%{search}%,contact_no.ilike.%{search}%,bootcamp_title.ilike.%{search}%')
 
@@ -1706,7 +1760,7 @@ def api_update_lead_status(lead_id):
             assigned_agents = [a.strip() for a in (lead.get('agent_name') or '').split(',') if a.strip()]
             if agent_name not in assigned_agents:
                 return jsonify({'error': 'Access denied'}), 403
-            if lead.get('final_status') == 'Follow Up' and lead.get('contacted_by') and lead.get('contacted_by') != agent_name:
+            if lead.get('final_status') in ['Follow Up', 'Call Back Later'] and lead.get('contacted_by') and lead.get('contacted_by') != agent_name:
                 return jsonify({'error': 'Access denied. This follow-up is owned by another agent.'}), 403
 
         supabase_admin.table('leads').update({
@@ -1754,7 +1808,7 @@ def api_search_leads():
         if user.get('role') == 'agent':
             for lead in data:
                 if 'contact_no' in lead:
-                    lead['contact_no'] = mask_phone(lead['contact_no'], role='agent')
+                    lead['contact_no'] = mask_phone(lead['contact_no'], role='agent', status=lead.get('final_status'))
         return jsonify(data)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1826,10 +1880,12 @@ def format_time(value):
 
 
 @app.template_filter('mask_phone')
-def mask_phone(value, role='agent'):
+def mask_phone(value, role='agent', status=None):
     if not value:
         return '—'
     if role == 'admin':
+        return value
+    if status in ['Follow Up', 'Call Back Later']:
         return value
     val_str = str(value).strip()
     if len(val_str) <= 4:
@@ -1850,6 +1906,7 @@ def status_class(status):
     mapping = {
         'Converted': 'badge-success',
         'Follow Up': 'badge-warning',
+        'Call Back Later': 'badge-warning',
         'Pending': 'badge-neutral',
         'Already Enrolled': 'badge-info',
         'Not Interested': 'badge-danger',

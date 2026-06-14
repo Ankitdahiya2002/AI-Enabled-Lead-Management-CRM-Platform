@@ -36,6 +36,7 @@
       <option value="">All Statuses</option>
       <option value="Pending"          {% if status_filter=='Pending' %}selected{% endif %}>⏳ Pending</option>
       <option value="Follow Up"        {% if status_filter=='Follow Up' %}selected{% endif %}>🔁 Follow Up</option>
+      <option value="Call Back Later"  {% if status_filter=='Call Back Later' %}selected{% endif %}>📞 Call Back Later</option>
       <option value="Converted"        {% if status_filter=='Converted' %}selected{% endif %}>✅ Converted</option>
       <option value="Already Enrolled" {% if status_filter=='Already Enrolled' %}selected{% endif %}>📋 Already Enrolled</option>
       <option value="Not Interested"   {% if status_filter=='Not Interested' %}selected{% endif %}>❌ Not Interested</option>
@@ -77,7 +78,7 @@
             <div style="font-size:0.75rem;color:var(--text-muted);">{{ lead.email }}</div>
           {% endif %}
         </td>
-        <td class="phone-num">{{ lead.contact_no | mask_phone(user.role) }}</td>
+        <td class="phone-num">{{ lead.contact_no | mask_phone(user.role, lead.final_status) }}</td>
         <td>
           <span class="badge badge-purple">{{ lead.campaign_type | campaign_label }}</span>
         </td>

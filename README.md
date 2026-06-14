@@ -72,7 +72,7 @@ graph TD
 
 ### 📊 Detailed Reporting & Exports
 * **Live Statistics:** Track total leads, conversions, follow-ups, today's call attempts, and recent uploads.
-* **Detailed CSV Export:** Download detailed report containing lead profiles, payment tracking, total attempts, conversion stats, and chronological pipe-separated call histories.
+* **Detailed CSV Export:** Download a detailed report containing lead profiles, payment tracking, total attempts, conversion status, and up to 10 separate attempt details (each containing Attempt Time, Agent, Status, Disposition, and Comments). All exported timestamps are converted to Indian Standard Time (IST) formatted as `YYYY-MM-DD hh:mm AM/PM`.
 
 ### 🔄 Multi-Agent Auto-Sharing on Call Entry
 * **Shared Lead Execution:** When an agent logs a call attempt/entry on a lead, the lead's `agent_name` column is updated to include all active agents.

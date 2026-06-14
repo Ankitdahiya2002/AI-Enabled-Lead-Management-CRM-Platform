@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Follow-Up — {{ lead.lead_name or lead.contact_no | mask_phone(user.role) }}{% endblock %}
+{% block title %}Follow-Up — {{ lead.lead_name or lead.contact_no | mask_phone(user.role, lead.final_status) }}{% endblock %}
 {% block page_title %}Follow-Up Details{% endblock %}
 
 {% block top_actions %}
@@ -14,7 +14,7 @@
   <span class="sep">›</span>
   <a href="{{ url_for('agent_campaign', campaign_type=lead.campaign_type) }}">{{ campaign_label }}</a>
   <span class="sep">›</span>
-  <a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}">{{ lead.lead_name or lead.contact_no | mask_phone(user.role) }}</a>
+  <a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}">{{ lead.lead_name or lead.contact_no | mask_phone(user.role, lead.final_status) }}</a>
   <span class="sep">›</span>
   <span class="current">Follow-Up / Conversion</span>
 </div>
@@ -25,7 +25,7 @@
   <div style="flex:1;min-width:0;">
     <div style="font-size:1.1rem;font-weight:800;">{{ lead.lead_name or '—' }}</div>
     <div style="color:var(--text-secondary);font-size:0.85rem;">
-      📞 <span class="phone-num">{{ lead.contact_no | mask_phone(user.role) }}</span>
+      📞 <span class="phone-num">{{ lead.contact_no | mask_phone(user.role, lead.final_status) }}</span>
       &nbsp;·&nbsp;
       {{ lead.bootcamp_title }}
     </div>
@@ -167,7 +167,7 @@
 
     <div class="call-timeline">
       {% for call in calls %}
-      <div class="call-item {% if not call.connected %}not-connected{% elif call.call_status == 'converted' %}converted{% elif call.call_status == 'follow_up' %}follow-up{% else %}connected{% endif %}">
+      <div class="call-item {% if not call.connected %}not-connected{% elif call.call_status == 'converted' %}converted{% elif call.call_status in ['follow_up', 'call_back_later'] %}follow-up{% else %}connected{% endif %}">
         <div class="call-card">
           <div class="call-header">
             <span class="call-attempt-num">#{{ call.attempt_number }}</span>
@@ -178,7 +178,7 @@
             {% endif %}
             {% if call.call_status %}
             <span class="badge badge-neutral" style="font-size:0.7rem;">
-              {% if call.call_status == 'follow_up' %}🔁{% elif call.call_status == 'converted' %}💰{% endif %}
+              {% if call.call_status == 'follow_up' %}🔁{% elif call.call_status == 'call_back_later' %}📞{% elif call.call_status == 'converted' %}💰{% endif %}
               {{ call.call_status | replace('_', ' ') | title }}
             </span>
             {% endif %}

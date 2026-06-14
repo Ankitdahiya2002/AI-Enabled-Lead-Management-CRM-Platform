@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS public.call_attempts (
     
     -- If connected:
     call_status TEXT CHECK (call_status IN (
-        'follow_up', 'converted', 'already_enrolled', 'need_more_detail', 'not_interested', 'discarded'
+        'follow_up', 'converted', 'already_enrolled', 'need_more_detail', 'not_interested', 'discarded', 'call_back_later'
     )),
     disposition TEXT,
     comments TEXT,
@@ -195,6 +195,7 @@ BEGIN
             WHEN NEW.call_status = 'not_interested' THEN 'Not Interested'
             WHEN NEW.call_status = 'discarded' THEN 'Discarded'
             WHEN NEW.call_status = 'follow_up' THEN 'Follow Up'
+            WHEN NEW.call_status = 'call_back_later' THEN 'Call Back Later'
             WHEN NEW.connected = FALSE THEN 'Pending'
             ELSE final_status
         END,

@@ -70,7 +70,7 @@
             <div style="font-size:0.75rem;color:var(--text-muted);">📚 {{ lead.bootcamp_title }}</div>
           {% endif %}
         </td>
-        <td class="phone-num">{{ lead.contact_no | mask_phone(user.role) }}</td>
+        <td class="phone-num">{{ lead.contact_no | mask_phone(user.role, lead.final_status) }}</td>
         <td>
           <span class="badge badge-purple">{{ lead.campaign_type | campaign_label }}</span>
         </td>

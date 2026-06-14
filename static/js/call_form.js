@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', function () {
   if (callStatus) {
     callStatus.addEventListener('change', function () {
       const val = this.value;
-      toggleSection('followUpSection',  val === 'follow_up');
+      toggleSection('followUpSection',  val === 'follow_up' || val === 'call_back_later');
       toggleSection('convertedSection', val === 'converted');
     });
   }
@@ -131,7 +131,7 @@ document.addEventListener('DOMContentLoaded', function () {
           }
         }
 
-        if (status === 'follow_up') {
+        if (status === 'follow_up' || status === 'call_back_later') {
           const fuDate = document.getElementById('follow_up_date')?.value;
           const fuTime = document.getElementById('follow_up_time')?.value;
           if (!fuDate) {
@@ -205,6 +205,9 @@ document.addEventListener('DOMContentLoaded', function () {
         { value: 'Hot', text: 'Hot' },
         { value: 'Warm', text: 'Warm' },
         { value: 'Cold', text: 'Cold' }
+      ],
+      call_back_later: [
+        { value: 'Call Back Later', text: 'Call Back Later' }
       ],
       converted: [
         { value: 'paid on call', text: 'paid on call' },

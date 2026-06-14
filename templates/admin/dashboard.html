@@ -211,6 +211,7 @@
         {% set cs = call.call_status or '' %}
         {% if cs == 'converted' %}<span class="badge badge-green">💰 Converted</span>
         {% elif cs == 'follow_up' %}<span class="badge badge-orange">🔁 Follow Up</span>
+        {% elif cs == 'call_back_later' %}<span class="badge badge-warning">📞 Call Back Later</span>
         {% elif cs == 'not_connected' %}<span class="badge">📵 Not Connected</span>
         {% else %}<span class="badge">{{ cs or '—' }}</span>{% endif %}
       </td>

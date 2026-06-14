@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Log Call — {{ lead.lead_name or lead.contact_no | mask_phone(user.role) }}{% endblock %}
+{% block title %}Log Call — {{ lead.lead_name or lead.contact_no | mask_phone(user.role, lead.final_status) }}{% endblock %}
 {% block page_title %}Log Call{% endblock %}
 
 {% block content %}
@@ -8,7 +8,7 @@
   <span class="sep">›</span>
   <a href="{{ url_for('agent_campaign', campaign_type=lead.campaign_type) }}">{{ campaign_label }}</a>
   <span class="sep">›</span>
-  <a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}">{{ lead.lead_name or lead.contact_no | mask_phone(user.role) }}</a>
+  <a href="{{ url_for('agent_lead_detail', lead_id=lead.id) }}">{{ lead.lead_name or lead.contact_no | mask_phone(user.role, lead.final_status) }}</a>
   <span class="sep">›</span>
   <span class="current">Log Call #{{ next_attempt }}</span>
 </div>
@@ -16,7 +16,7 @@
 <div class="page-header">
   <div class="page-header-left">
     <h1>Log Call — Attempt #{{ next_attempt }}</h1>
-    <p>Recording call for <strong>{{ lead.lead_name or lead.contact_no | mask_phone(user.role) }}</strong> · {{ lead.bootcamp_title }}</p>
+    <p>Recording call for <strong>{{ lead.lead_name or lead.contact_no | mask_phone(user.role, lead.final_status) }}</strong> · {{ lead.bootcamp_title }}</p>
   </div>
 </div>
 
@@ -32,6 +32,7 @@
           <label class="form-label">📅 Call Date & Time</label>
           <input type="datetime-local" name="called_at" id="called_at" class="form-control"
                  value="{{ now_str }}" required>
+          <small style="color:var(--text-muted);font-size:0.75rem;margin-top:4px;display:block;">💡 You can backdate this if the call or conversion happened after hours.</small>
         </div>
         <div class="form-group">
           <label class="form-label">Attempt Number</label>
@@ -80,6 +81,7 @@
             <select name="call_status" id="call_status" class="form-control">
               <option value="">— Select Outcome —</option>
               <option value="follow_up">🔁 Follow Up</option>
+              <option value="call_back_later">📞 Call Back Later</option>
               <option value="converted">💰 Converted (Paid on Call)</option>
               <option value="already_enrolled">📋 Already Enrolled</option>
               <option value="need_more_detail">ℹ️ Need More Detail</option>
@@ -248,7 +250,7 @@
         </div>
         <div class="lead-info-item">
           <div class="lead-info-label">Phone</div>
-          <div class="lead-info-value phone-num" style="font-size:1rem;font-weight:700;">{{ lead.contact_no | mask_phone(user.role) }}</div>
+          <div class="lead-info-value phone-num" style="font-size:1rem;font-weight:700;">{{ lead.contact_no | mask_phone(user.role, lead.final_status) }}</div>
         </div>
         <div class="lead-info-item">
           <div class="lead-info-label">Bootcamp</div>

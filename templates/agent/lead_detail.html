@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ lead.lead_name or lead.contact_no | mask_phone(user.role) }}{% endblock %}
+{% block title %}{{ lead.lead_name or lead.contact_no | mask_phone(user.role, lead.final_status) }}{% endblock %}
 {% block page_title %}Lead Detail{% endblock %}
 
 {% block top_actions %}
@@ -18,7 +18,7 @@
   <span class="sep">›</span>
   <a href="{{ url_for('agent_campaign', campaign_type=lead.campaign_type) }}">{{ campaign_label }}</a>
   <span class="sep">›</span>
-  <span class="current">{{ lead.lead_name or lead.contact_no | mask_phone(user.role) }}</span>
+  <span class="current">{{ lead.lead_name or lead.contact_no | mask_phone(user.role, lead.final_status) }}</span>
 </div>
 
 <!-- Lead Hero Card -->
@@ -27,7 +27,7 @@
   <div class="lead-hero-info">
     <div class="lead-hero-name">{{ lead.lead_name or '—' }}</div>
     <div class="lead-hero-sub">
-      📞 <span class="phone-num">{{ lead.contact_no | mask_phone(user.role) }}</span>
+      📞 <span class="phone-num">{{ lead.contact_no | mask_phone(user.role, lead.final_status) }}</span>
       {% if lead.email %} &nbsp;·&nbsp; ✉️ {{ lead.email }}{% endif %}
     </div>
     <div class="lead-hero-tags">
@@ -205,7 +205,7 @@
     {% if calls %}
     <div class="call-timeline">
       {% for call in calls | reverse %}
-      <div class="call-item {% if not call.connected %}not-connected{% elif call.call_status == 'converted' %}converted{% elif call.call_status == 'follow_up' %}follow-up{% else %}connected{% endif %}">
+      <div class="call-item {% if not call.connected %}not-connected{% elif call.call_status == 'converted' %}converted{% elif call.call_status in ['follow_up', 'call_back_later'] %}follow-up{% else %}connected{% endif %}">
         <div class="call-card">
           <div class="call-header">
             <span class="call-attempt-num">Attempt #{{ call.attempt_number }}</span>
@@ -217,6 +217,7 @@
             {% if call.call_status %}
               <span class="badge {{ call.call_status | replace('_', ' ') | title | status_class }}">
                 {% if call.call_status == 'follow_up' %}🔁 Follow Up
+                {% elif call.call_status == 'call_back_later' %}📞 Call Back Later
                 {% elif call.call_status == 'converted' %}💰 Converted
                 {% elif call.call_status == 'already_enrolled' %}📋 Already Enrolled
                 {% elif call.call_status == 'need_more_detail' %}ℹ️ Need More Detail
@@ -238,7 +239,7 @@
                 {% if call.comments %}
                   <div class="call-detail"><strong>Comments:</strong> {{ call.comments }}</div>
                 {% endif %}
-                {% if call.call_status == 'follow_up' and call.follow_up_date %}
+                {% if call.call_status in ['follow_up', 'call_back_later'] and call.follow_up_date %}
                   <div class="call-detail" style="color:var(--warning);">
                     <strong>Follow-up:</strong> {{ call.follow_up_date }}
                     {% if call.follow_up_time %}at {{ call.follow_up_time }}{% endif %}

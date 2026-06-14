@@ -54,7 +54,7 @@
           <div class="multiselect-dropdown" id="multiselectDropdown" style="display: none; position: absolute; top: 46px; left: 0; right: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 20px rgba(0,0,0,0.3); max-height: 250px; overflow-y: auto; z-index: 1000; padding: 6px 0;">
             {% for agent in agents %}
             <label class="multiselect-option agent-option" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 0.85rem; color: var(--text-primary); transition: background 0.15s; border-radius: 0;">
-               <input type="checkbox" name="agent_names" value="{{ agent.name }}" class="agent-checkbox" onchange="handleUploadAgentCheckboxChange()" style="cursor:pointer; transform:scale(1.05);">
+               <input type="checkbox" name="agent_names" value="{{ agent.name }}" data-campaigns="{{ agent.allowed_campaigns | join(',') }}" class="agent-checkbox" onchange="handleUploadAgentCheckboxChange()" style="cursor:pointer; transform:scale(1.05);">
               <span>🎧 {{ agent.name }}</span>
             </label>
             {% endfor %}
@@ -313,59 +313,17 @@ document.getElementById('campaign_type').addEventListener('change', function() {
   }
 })();
 
-// Agent teams mapping
-const agentTeams = {
-  'harsh': 'atpitch_sia_sta',
-  'krishna': 'atpitch_sia_sta',
-  'deepak': 'atpitch_sia_sta',
-  'manmohan': 'atpitch_sia_sta',
-  'kamaljeet': 'atpitch_sia_sta',
-  'akansha': 'fp',
-  'kulbir': 'fp',
-  'abhisekh': 'fp',
-  'faiz ansari': 'fp',
-  'anchal': 'upsell_others',
-  'muskan': 'upsell_others',
-  'khusbu': 'upsell_others',
-  'sumaitari': 'upsell_others',
-  'sumaitri': 'upsell_others',
-  'ameen': 'upsell_others',
-  'pankaj': 'upsell_others',
-  'jyoti': 'upsell_others',
-};
-
-function getAgentTeam(agentName) {
-  const cleanName = agentName.trim().toLowerCase();
-  if (agentTeams[cleanName]) return agentTeams[cleanName];
-  const firstName = cleanName.split(' ')[0];
-  if (agentTeams[firstName]) return agentTeams[firstName];
-  for (let key in agentTeams) {
-    if (cleanName.includes(key) || key.includes(cleanName)) {
-      return agentTeams[key];
-    }
-  }
-  return null;
-}
-
 function updateAgentDropdown() {
   const campaignVal = document.getElementById('campaign_type').value;
   const placeholder = document.getElementById('multiselectPlaceholder');
-  
-  let targetTeam = null;
-  if (campaignVal === 'atpitch_sia' || campaignVal === 'atpitch_sta') {
-    targetTeam = 'atpitch_sia_sta';
-  } else if (campaignVal === 'fp_l1') {
-    targetTeam = 'fp';
-  } else if (campaignVal === 'upsell' || campaignVal === 'atpitch_others') {
-    targetTeam = 'upsell_others';
-  }
 
   const agentOptions = document.querySelectorAll('.agent-option');
   agentOptions.forEach(option => {
     const checkbox = option.querySelector('.agent-checkbox');
-    const team = getAgentTeam(checkbox.value);
+    const allowedCampsStr = checkbox.getAttribute('data-campaigns') || '';
+    const allowedCamps = allowedCampsStr.split(',').map(s => s.trim().toLowerCase());
     
-    if (!targetTeam || team === targetTeam) {
+    if (!campaignVal || allowedCamps.includes(campaignVal.toLowerCase())) {
       option.style.display = 'flex';
     } else {
       option.style.display = 'none';
